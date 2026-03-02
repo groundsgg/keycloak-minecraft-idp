@@ -1,0 +1,175 @@
+package gg.grounds.keycloak.minecraft.api
+
+import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.jboss.logging.Logger
+import java.io.IOException
+import java.net.URI
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+
+/**
+ * Handles Minecraft Services API calls: authentication, ownership check, and profile retrieval.
+ */
+class MinecraftApi {
+
+    /**
+     * Authenticates with Minecraft services using the Xbox XSTS token.
+     */
+    fun authenticateWithMinecraft(userHash: String, xstsToken: String): MinecraftAuthResponse {
+        val requestBody = mapOf("identityToken" to "XBL3.0 x=$userHash;$xstsToken")
+
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(MINECRAFT_AUTH_URL))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .timeout(Duration.ofSeconds(30))
+            .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+            .build()
+
+        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+        if (response.statusCode() != 200) {
+            logger.errorf("Minecraft authentication failed with status %d", response.statusCode())
+            throw IOException("Minecraft authentication failed with status: ${response.statusCode()}")
+        }
+
+        return objectMapper.readValue(response.body(), MinecraftAuthResponse::class.java)
+    }
+
+    /**
+     * Checks Java Edition ownership via the entitlements endpoint.
+     *
+     * More reliable than relying on the profile endpoint returning 404: Game Pass users
+     * who haven't launched the game yet also get a 404 on /minecraft/profile despite
+     * owning the game.
+     *
+     * Returns true if the account has a Minecraft Java Edition entitlement.
+     */
+    fun checkOwnership(minecraftAccessToken: String): Boolean {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(MINECRAFT_ENTITLEMENTS_URL))
+            .header("Authorization", "Bearer $minecraftAccessToken")
+            .header("Accept", "application/json")
+            .timeout(Duration.ofSeconds(30))
+            .GET()
+            .build()
+
+        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+        if (response.statusCode() != 200) {
+            logger.warnf("Entitlements check failed with status %d", response.statusCode())
+            return false
+        }
+
+        val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
+        val ownsJava = entitlements.items.any { it.name in JAVA_EDITION_ENTITLEMENTS }
+        logger.debugf("Ownership check: items=%s, ownsJava=%b", entitlements.items.map { it.name }, ownsJava)
+        return ownsJava
+    }
+
+    /**
+     * Gets the Minecraft Java Edition profile (username + UUID).
+     *
+     * Throws [MinecraftProfileNotFoundException] when the profile does not exist yet,
+     * e.g. a Game Pass user who hasn't launched the game through the official launcher.
+     */
+    fun getProfile(minecraftAccessToken: String): MinecraftProfile {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(MINECRAFT_PROFILE_URL))
+            .header("Authorization", "Bearer $minecraftAccessToken")
+            .header("Accept", "application/json")
+            .timeout(Duration.ofSeconds(30))
+            .GET()
+            .build()
+
+        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+        if (response.statusCode() == 404) {
+            logger.warn("Minecraft profile not found (404)")
+            throw MinecraftProfileNotFoundException("The user has no Minecraft Java Edition profile")
+        }
+
+        if (response.statusCode() != 200) {
+            logger.errorf("Minecraft profile request failed with status %d", response.statusCode())
+            throw IOException("Minecraft profile request failed with status: ${response.statusCode()}")
+        }
+
+        return objectMapper.readValue(response.body(), MinecraftProfile::class.java)
+    }
+
+    // --- Response types ---
+    // @JsonCreator on the primary constructor lets Jackson use it unambiguously without
+    // requiring jackson-module-kotlin (and the ~4 MB kotlin-reflect it pulls in).
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class MinecraftAuthResponse @JsonCreator constructor(
+        @JsonProperty("access_token") val accessToken: String,
+        @JsonProperty("token_type") val tokenType: String?,
+        @JsonProperty("expires_in") val expiresIn: Int
+    )
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class EntitlementsResponse @JsonCreator constructor(
+        @JsonProperty("items") val items: List<EntitlementItem> = emptyList()
+    )
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class EntitlementItem @JsonCreator constructor(
+        @JsonProperty("name") val name: String
+    )
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class MinecraftProfile @JsonCreator constructor(
+        @JsonProperty("id") val id: String,
+        @JsonProperty("name") val name: String,
+        @JsonProperty("skins") val skins: List<Skin> = emptyList(),
+        @JsonProperty("capes") val capes: List<Cape> = emptyList()
+    ) {
+        /** UUID in standard hyphenated format (e.g. 550e8400-e29b-41d4-a716-446655440000) */
+        val formattedUuid: String
+            get() = if (id.length == 32) {
+                "${id.substring(0, 8)}-${id.substring(8, 12)}-${id.substring(12, 16)}" +
+                    "-${id.substring(16, 20)}-${id.substring(20)}"
+            } else {
+                id
+            }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class Skin @JsonCreator constructor(
+        @JsonProperty("id") val id: String?,
+        @JsonProperty("state") val state: String?,
+        @JsonProperty("url") val url: String?,
+        @JsonProperty("variant") val variant: String?
+    )
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class Cape @JsonCreator constructor(
+        @JsonProperty("id") val id: String?,
+        @JsonProperty("state") val state: String?,
+        @JsonProperty("url") val url: String?,
+        @JsonProperty("alias") val alias: String?
+    )
+
+    /** Thrown when an account has Java Edition entitlement but no profile yet (e.g. Game Pass). */
+    class MinecraftProfileNotFoundException(message: String) : IOException(message)
+
+    companion object {
+        private val logger = Logger.getLogger(MinecraftApi::class.java)
+        // Shared, thread-safe after configuration
+        internal val objectMapper: ObjectMapper = ObjectMapper()
+        private const val MINECRAFT_AUTH_URL =
+            "https://api.minecraftservices.com/authentication/login_with_xbox"
+        private const val MINECRAFT_ENTITLEMENTS_URL =
+            "https://api.minecraftservices.com/entitlements/mcstore"
+        private const val MINECRAFT_PROFILE_URL =
+            "https://api.minecraftservices.com/minecraft/profile"
+
+        /** Entitlement item names that indicate Java Edition ownership. */
+        private val JAVA_EDITION_ENTITLEMENTS = setOf("product_minecraft", "game_minecraft")
+    }
+}
