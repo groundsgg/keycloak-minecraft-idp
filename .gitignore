@@ -1,18 +1,10 @@
 # Compiled class files
 *.class
 
-# Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
-docker/providers/keycloak-minecraft.jar
+# Gradle
+build/
+.gradle/
+gradle.properties
 
 # IDE
 .idea/
@@ -35,5 +27,5 @@ Thumbs.db
 *.log
 
 # Docker
+docker/providers/keycloak-minecraft.jar
 docker/keycloak-data/
-
