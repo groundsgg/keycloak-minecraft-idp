@@ -11,17 +11,14 @@ import org.keycloak.provider.ProviderConfigurationBuilder
 /**
  * Factory for creating Minecraft Identity Provider instances.
  *
- * Reads optional server-level defaults for client credentials from SPI configuration,
- * allowing credentials to be injected via Kubernetes Secrets instead of storing them
- * in the realm database.
+ * Reads optional server-level defaults for client credentials from SPI configuration, allowing
+ * credentials to be injected via Kubernetes Secrets instead of storing them in the realm database.
  *
- * Environment variables (Kubernetes Secret usage):
- *   KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID
- *   KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET
+ * Environment variables (Kubernetes Secret usage): KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID
+ * KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET
  *
- * Or as kc.sh flags:
- *   --spi-identity-provider-minecraft-client-id=<value>
- *   --spi-identity-provider-minecraft-client-secret=<value>
+ * Or as kc.sh flags: --spi-identity-provider-minecraft-client-id=<value>
+ * --spi-identity-provider-minecraft-client-secret=<value>
  *
  * Admin UI values always take precedence over these server-level defaults.
  */
@@ -31,9 +28,7 @@ class MinecraftIdentityProviderFactory :
     private var spiClientId: String? = null
     private var spiClientSecret: String? = null
 
-    /**
-     * Called once at server startup. Reads SPI-level config (env vars / kc.sh flags).
-     */
+    /** Called once at server startup. Reads SPI-level config (env vars / kc.sh flags). */
     override fun init(config: Config.Scope) {
         // Keycloak maps KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID → "client-id" (kebab-case)
         spiClientId = config.get("client-id")
@@ -43,11 +38,17 @@ class MinecraftIdentityProviderFactory :
             spiClientId != null && spiClientSecret != null ->
                 logger.info("Minecraft IdP: client credentials loaded from SPI configuration")
             spiClientId != null ->
-                logger.warn("Minecraft IdP: client-id set via SPI config but client-secret is missing")
+                logger.warn(
+                    "Minecraft IdP: client-id set via SPI config but client-secret is missing"
+                )
             spiClientSecret != null ->
-                logger.warn("Minecraft IdP: client-secret set via SPI config but client-id is missing")
+                logger.warn(
+                    "Minecraft IdP: client-secret set via SPI config but client-id is missing"
+                )
             else ->
-                logger.debug("Minecraft IdP: no SPI-level credentials configured, using Admin UI values")
+                logger.debug(
+                    "Minecraft IdP: no SPI-level credentials configured, using Admin UI values"
+                )
         }
     }
 
@@ -59,7 +60,10 @@ class MinecraftIdentityProviderFactory :
         session: KeycloakSession,
         model: IdentityProviderModel,
     ): MinecraftIdentityProvider =
-        MinecraftIdentityProvider(session, MinecraftIdentityProviderConfig(model, spiClientId, spiClientSecret))
+        MinecraftIdentityProvider(
+            session,
+            MinecraftIdentityProviderConfig(model, spiClientId, spiClientSecret),
+        )
 
     override fun createConfig(): MinecraftIdentityProviderConfig = MinecraftIdentityProviderConfig()
 

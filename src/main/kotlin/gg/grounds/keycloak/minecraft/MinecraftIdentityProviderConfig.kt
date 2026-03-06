@@ -7,16 +7,14 @@ import org.keycloak.models.IdentityProviderModel
  * Configuration for the Minecraft Identity Provider.
  *
  * Client credentials are resolved in this priority order:
- *   1. Admin UI / realm database
- *   2. SPI configuration (env vars or kc.sh flags):
- *        KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID
- *        KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET
- *      or equivalently:
- *        --spi-identity-provider-minecraft-client-id=<value>
- *        --spi-identity-provider-minecraft-client-secret=<value>
+ * 1. Admin UI / realm database
+ * 2. SPI configuration (env vars or kc.sh flags): KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID
+ *    KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET or equivalently:
+ *    --spi-identity-provider-minecraft-client-id=<value>
+ *    --spi-identity-provider-minecraft-client-secret=<value>
  *
- * URLs are fixed to Microsoft's consumer OAuth2 endpoints (consumers tenant required —
- * using the common or a corporate tenant will cause Xbox Live errors).
+ * URLs are fixed to Microsoft's consumer OAuth2 endpoints (consumers tenant required — using the
+ * common or a corporate tenant will cause Xbox Live errors).
  */
 class MinecraftIdentityProviderConfig(
     model: IdentityProviderModel,
