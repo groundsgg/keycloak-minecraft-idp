@@ -15,7 +15,7 @@ services:
       KC_DB: dev-file
     volumes:
       # Mount the built JAR for hot-reload during development
-      - ../target/keycloak-minecraft.jar:/opt/keycloak/providers/keycloak-minecraft.jar
+      - ../build/libs/keycloak-minecraft.jar:/opt/keycloak/providers/keycloak-minecraft.jar
       # Persist H2 database
       - keycloak-data:/opt/keycloak/data
     ports:

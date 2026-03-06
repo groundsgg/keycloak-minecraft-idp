@@ -1,8 +1,9 @@
 # Keycloak Minecraft Identity Provider
 
 [![Build](https://github.com/groundsgg/keycloak-minecraft/actions/workflows/build.yml/badge.svg)](https://github.com/groundsgg/keycloak-minecraft/actions/workflows/build.yml)
-[![Keycloak](https://img.shields.io/badge/Keycloak-25.x-blue.svg)](https://www.keycloak.org/)
-[![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://adoptium.net/)
+[![Keycloak](https://img.shields.io/badge/Keycloak-26.x-blue.svg)](https://www.keycloak.org/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.x-purple.svg)](https://kotlinlang.org/)
+[![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://adoptium.net/)
 
 A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and stores the Minecraft player name as the primary username.
 
@@ -18,7 +19,7 @@ A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xb
 
 | Plugin Version | Keycloak Version | Java Version |
 |----------------|------------------|--------------|
-| 1.x            | 25.x             | 17+          |
+| 2.x            | 26.x             | 21+          |
 
 ## Quick Start
 
@@ -29,7 +30,7 @@ Download the latest JAR from the [Releases](https://github.com/groundsgg/keycloa
 Or build from source:
 
 ```bash
-mvn clean package
+./gradlew shadowJar
 ```
 
 ### Installation
@@ -67,9 +68,15 @@ sequenceDiagram
     Xbox-->>Keycloak: XSTS Token
     Keycloak->>MC: Authenticate with Minecraft
     MC-->>Keycloak: Minecraft Token
-    Keycloak->>MC: Get Profile
-    MC-->>Keycloak: Username + UUID
-    Keycloak-->>User: Logged in as Minecraft user
+    Keycloak->>MC: Check entitlements (/entitlements/mcstore)
+    MC-->>Keycloak: Owned products
+    alt Owns Java Edition
+        Keycloak->>MC: Get Profile
+        MC-->>Keycloak: Username + UUID
+        Keycloak-->>User: Logged in as Java Edition player
+    else Bedrock / no Java Edition
+        Keycloak-->>User: Logged in as Xbox Gamertag (Bedrock)
+    end
 ```
 
 ## Prerequisites
@@ -115,7 +122,7 @@ After successful authentication, the following attributes are stored:
 
 ```bash
 # Build the plugin
-mvn clean package
+./gradlew shadowJar
 
 # Start Docker container
 cd docker
@@ -136,8 +143,10 @@ The user doesn't have Minecraft Java Edition on their Microsoft account. They wi
 
 | Error Code | Meaning |
 |------------|---------|
+| 2148916227 | Account banned from Xbox Live |
 | 2148916233 | Microsoft account doesn't have an Xbox account |
 | 2148916235 | Xbox Live is not available in the user's country |
+| 2148916236/7 | Adult verification required (South Korea) |
 | 2148916238 | Child account - needs to be added to a family |
 
 ## Contributing

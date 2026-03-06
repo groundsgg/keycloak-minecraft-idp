@@ -35,8 +35,9 @@ class MinecraftIdentityProviderFactory :
      * Called once at server startup. Reads SPI-level config (env vars / kc.sh flags).
      */
     override fun init(config: Config.Scope) {
-        spiClientId = config.get("clientId")
-        spiClientSecret = config.get("clientSecret")
+        // Keycloak maps KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID → "client-id" (kebab-case)
+        spiClientId = config.get("client-id")
+        spiClientSecret = config.get("client-secret")
 
         when {
             spiClientId != null && spiClientSecret != null ->

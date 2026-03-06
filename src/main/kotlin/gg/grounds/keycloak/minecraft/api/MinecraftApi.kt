@@ -61,13 +61,12 @@ class MinecraftApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.warnf("Entitlements check failed with status %d", response.statusCode())
-            return false
+            throw IOException("Entitlements check failed with status: ${response.statusCode()}")
         }
 
         val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
-        val ownsJava = entitlements.items.any { it.name in JAVA_EDITION_ENTITLEMENTS }
-        logger.debugf("Ownership check: items=%s, ownsJava=%b", entitlements.items.map { it.name }, ownsJava)
+        val ownsJava = entitlements.items?.any { it.name in JAVA_EDITION_ENTITLEMENTS } ?: false
+        logger.debugf("Ownership check: items=%s, ownsJava=%b", entitlements.items?.map { it.name }, ownsJava)
         return ownsJava
     }
 
@@ -114,7 +113,7 @@ class MinecraftApi {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class EntitlementsResponse @JsonCreator constructor(
-        @JsonProperty("items") val items: List<EntitlementItem> = emptyList()
+        @JsonProperty("items") val items: List<EntitlementItem>?
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -126,8 +125,8 @@ class MinecraftApi {
     data class MinecraftProfile @JsonCreator constructor(
         @JsonProperty("id") val id: String,
         @JsonProperty("name") val name: String,
-        @JsonProperty("skins") val skins: List<Skin> = emptyList(),
-        @JsonProperty("capes") val capes: List<Cape> = emptyList()
+        @JsonProperty("skins") val skins: List<Skin>?,
+        @JsonProperty("capes") val capes: List<Cape>?
     ) {
         /** UUID in standard hyphenated format (e.g. 550e8400-e29b-41d4-a716-446655440000) */
         val formattedUuid: String
