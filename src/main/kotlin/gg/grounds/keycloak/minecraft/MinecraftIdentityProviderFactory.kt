@@ -36,19 +36,17 @@ class MinecraftIdentityProviderFactory :
 
         when {
             spiClientId != null && spiClientSecret != null ->
-                logger.info("Minecraft IdP: client credentials loaded from SPI configuration")
+                logger.info("Loaded client credentials from SPI configuration")
             spiClientId != null ->
                 logger.warn(
-                    "Minecraft IdP: client-id set via SPI config but client-secret is missing"
+                    "Incomplete SPI configuration (clientId=present, clientSecret=missing)"
                 )
             spiClientSecret != null ->
                 logger.warn(
-                    "Minecraft IdP: client-secret set via SPI config but client-id is missing"
+                    "Incomplete SPI configuration (clientId=missing, clientSecret=present)"
                 )
             else ->
-                logger.debug(
-                    "Minecraft IdP: no SPI-level credentials configured, using Admin UI values"
-                )
+                logger.debug("No SPI-level credentials configured, using Admin UI values")
         }
     }
 

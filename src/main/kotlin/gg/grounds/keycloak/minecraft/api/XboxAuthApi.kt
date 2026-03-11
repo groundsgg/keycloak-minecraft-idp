@@ -48,7 +48,7 @@ class XboxAuthApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.errorf("Xbox authentication failed with status %d", response.statusCode())
+            logger.errorf("Xbox authentication failed (status=%d)", response.statusCode())
             throw IOException("Xbox authentication failed with status: ${response.statusCode()}")
         }
 
@@ -84,7 +84,7 @@ class XboxAuthApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.warnf("XSTS token request failed with status %d", response.statusCode())
+            logger.warnf("XSTS token request failed (status=%d)", response.statusCode())
 
             if (response.statusCode() == 401) {
                 try {

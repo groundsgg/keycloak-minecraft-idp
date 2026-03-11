@@ -46,9 +46,6 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
 
     override fun doGetFederatedIdentity(accessToken: String): BrokeredIdentityContext {
         try {
-            // Fix #9: debug instead of info — logged on every login attempt
-            logger.debug("Starting Minecraft authentication flow")
-
             // Step 1: Authenticate with Xbox Live
             val xboxResponse = xboxAuthApi.authenticateWithXbox(accessToken)
             // Step 2: Obtain XSTS token scoped to Minecraft services
@@ -56,15 +53,13 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                 try {
                     xboxAuthApi.obtainXstsToken(xboxResponse.token)
                 } catch (e: XboxAuthApi.XboxAuthException) {
-                    logger.warnf("Xbox XSTS authentication failed: %s", e.message)
+                    logger.warnf("Xbox XSTS authentication failed (reason=%s)", e.message)
                     throw IdentityBrokerException(e.message, e)
                 }
 
             val xstsToken = xstsResponse.token
             val xboxGamertag = xstsResponse.gamertag
             val xboxUserId = xstsResponse.xboxUserId
-            logger.debug("XSTS token obtained successfully")
-
             // Fix #5: userHash not logged (PII). Fix #2 (userHash-source): use uhs from XSTS
             // response per spec — it's the same value as from Xbox Live step, but spec-compliant.
             val userHash =
@@ -84,7 +79,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                     // Step 5a: Fetch Java Edition profile
                     val profile = minecraftApi.getProfile(minecraftToken)
                     logger.infof(
-                        "Minecraft Java Edition profile: %s (UUID: %s)",
+                        "Fetched Java Edition profile (username=%s, uuid=%s)",
                         profile.name,
                         profile.formattedUuid,
                     )
@@ -92,7 +87,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                 } catch (e: MinecraftApi.MinecraftProfileNotFoundException) {
                     // Game Pass user who has never opened the launcher — profile setup required
                     logger.warnf(
-                        "User owns Java Edition (Game Pass) but has no profile yet: %s",
+                        "Java Edition profile not found for Game Pass user (reason=%s)",
                         e.message,
                     )
                     throw IdentityBrokerException(
@@ -105,10 +100,10 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                 return buildBedrockIdentity(xboxGamertag, xboxUserId)
             }
         } catch (e: XboxAuthApi.XboxAuthException) {
-            logger.warnf("Xbox authentication failed: %s", e.message)
+            logger.warnf("Xbox authentication failed (reason=%s)", e.message)
             throw IdentityBrokerException(e.message, e)
         } catch (e: IOException) {
-            logger.error("Failed to authenticate with Minecraft services", e)
+            logger.error("Minecraft services authentication failed", e)
             throw IdentityBrokerException("Minecraft authentication failed. Please try again.", e)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -145,7 +140,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                     "Could not retrieve a stable Xbox User ID for Bedrock user"
                 )
 
-        logger.infof("Bedrock Edition user: %s", xboxGamertag)
+        logger.infof("Identified Bedrock Edition user (gamertag=%s)", xboxGamertag)
 
         return BrokeredIdentityContext(uniqueId, config).apply {
             username = xboxGamertag

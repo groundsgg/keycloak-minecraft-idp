@@ -34,7 +34,7 @@ class MinecraftApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.errorf("Minecraft authentication failed with status %d", response.statusCode())
+            logger.errorf("Minecraft authentication failed (status=%d)", response.statusCode())
             throw IOException(
                 "Minecraft authentication failed with status: ${response.statusCode()}"
             )
@@ -70,7 +70,7 @@ class MinecraftApi {
         val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
         val ownsJava = entitlements.items?.any { it.name in JAVA_EDITION_ENTITLEMENTS } ?: false
         logger.debugf(
-            "Ownership check: items=%s, ownsJava=%b",
+            "Checked Java Edition ownership (items=%s, ownsJava=%b)",
             entitlements.items?.map { it.name },
             ownsJava,
         )
@@ -96,14 +96,14 @@ class MinecraftApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() == 404) {
-            logger.warn("Minecraft profile not found (404)")
+            logger.warn("Minecraft profile not found (status=404)")
             throw MinecraftProfileNotFoundException(
                 "The user has no Minecraft Java Edition profile"
             )
         }
 
         if (response.statusCode() != 200) {
-            logger.errorf("Minecraft profile request failed with status %d", response.statusCode())
+            logger.errorf("Minecraft profile request failed (status=%d)", response.statusCode())
             throw IOException(
                 "Minecraft profile request failed with status: ${response.statusCode()}"
             )
