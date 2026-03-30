@@ -13,7 +13,7 @@ import org.keycloak.models.IdentityProviderModel
  *    --spi-identity-provider-minecraft-client-id=<value>
  *    --spi-identity-provider-minecraft-client-secret=<value>
  *
- * URLs are fixed to Microsoft's consumer OAuth2 endpoints (consumers tenant required — using the
+ * URLs are fixed to Microsoft's consumer OAuth2 endpoints (consumer tenant required — using the
  * common or a corporate tenant will cause Xbox Live errors).
  */
 class MinecraftIdentityProviderConfig(

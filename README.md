@@ -1,25 +1,14 @@
 # Keycloak Minecraft Identity Provider
 
-[![Build](https://github.com/groundsgg/keycloak-minecraft/actions/workflows/build.yml/badge.svg)](https://github.com/groundsgg/keycloak-minecraft/actions/workflows/build.yml)
-[![Keycloak](https://img.shields.io/badge/Keycloak-26.x-blue.svg)](https://www.keycloak.org/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.x-purple.svg)](https://kotlinlang.org/)
-[![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://adoptium.net/)
-
 A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and stores the Minecraft player name as the primary username.
 
 ## Features
 
-- **Minecraft Java Edition Support** - Authenticate players with their Minecraft Java Edition account
-- **Bedrock Edition Fallback** - Players without Java Edition can use their Xbox Gamertag
-- **Automatic Username Sync** - Keycloak username is automatically set to the Minecraft player name
-- **Rich User Attributes** - Stores Minecraft UUID, edition type, and Xbox Gamertag
-- **Seamless Integration** - Works like any other Keycloak Identity Provider
-
-## Compatibility
-
-| Plugin Version | Keycloak Version | Java Version |
-|----------------|------------------|--------------|
-| 2.x            | 26.x             | 21+          |
+- **Minecraft Java Edition Support** – Authenticate players with their Minecraft Java Edition account
+- **Bedrock Edition Fallback** – Players without Java Edition can use their Xbox Gamertag
+- **Automatic Username Sync** – Keycloak username is automatically set to the Minecraft player name
+- **Rich User Attributes** – Stores Minecraft UUID, edition type, and Xbox Gamertag
+- **Seamless Integration** – Works like any other Keycloak Identity Provider
 
 ## Quick Start
 
@@ -81,6 +70,11 @@ sequenceDiagram
 
 ## Prerequisites
 
+- JDK 21 installed locally and available on `PATH`
+- A Microsoft Azure App Registration
+
+Gradle toolchain auto-download is disabled in this repository. Builds require a locally installed JDK 21 and will not provision one automatically.
+
 ### Azure App Registration
 
 You need a Microsoft Azure App Registration:
@@ -104,30 +98,39 @@ You need a Microsoft Azure App Registration:
 
 After successful authentication, the following attributes are stored:
 
-| Attribute | Description |
-|-----------|-------------|
-| `username` | Minecraft player name or Xbox Gamertag (primary Keycloak username) |
-| `minecraft_username` | The Minecraft player name or Xbox Gamertag |
-| `minecraft_edition` | `java` or `bedrock` - which edition the player owns |
-| `minecraft_uuid` | The Minecraft UUID (only for Java Edition) |
-| `xbox_gamertag` | The player's Xbox Gamertag |
-| `xbox_user_id` | The Xbox User ID (if available) |
+| Attribute            | Description                                                        |
+|----------------------|--------------------------------------------------------------------|
+| `username`           | Minecraft player name or Xbox Gamertag (primary Keycloak username) |
+| `minecraft_username` | The Minecraft player name or Xbox Gamertag                         |
+| `minecraft_edition`  | `java` or `bedrock` - which identity path was used for login       |
+| `minecraft_uuid`     | The Minecraft UUID (only for Java Edition)                         |
+| `xbox_gamertag`      | The player's Xbox Gamertag                                         |
+| `xbox_user_id`       | The Xbox User ID (if available)                                    |
 
 ### Java Edition vs. Bedrock Edition
 
 - **Java Edition**: Players with Minecraft Java Edition get their Java player name and UUID
-- **Bedrock Edition**: Players without Java Edition (Bedrock only) get their Xbox Gamertag as username
+- **Bedrock Edition**: Players without Java Edition (Bedrock only) get their Xbox Gamertag as their username
+
+If a player owns both editions, the plugin resolves them as `java`. `minecraft_edition` reflects the identity path used for login, not the full set of editions the account owns.
 
 ## Local Development
 
 ```bash
-# Build the plugin
+# Verify Java 21 is installed
+java -version
+
+# Build the provider JAR
 ./gradlew shadowJar
 
-# Start Docker container
+# Start Keycloak with the development compose file
 cd docker
-docker-compose up -d
+docker compose up -d
 ```
+
+`java -version` must report Java 21 before running the Gradle build.
+
+The development compose file mounts `../build/libs/keycloak-minecraft.jar` into the upstream Keycloak image and runs `kc.sh build` before `start-dev`.
 
 Keycloak will be available at http://localhost:8080.
 - **Admin Username**: admin
@@ -141,13 +144,13 @@ The user doesn't have Minecraft Java Edition on their Microsoft account. They wi
 
 ### Xbox Live Errors
 
-| Error Code | Meaning |
-|------------|---------|
-| 2148916227 | Account banned from Xbox Live |
-| 2148916233 | Microsoft account doesn't have an Xbox account |
-| 2148916235 | Xbox Live is not available in the user's country |
-| 2148916236/7 | Adult verification required (South Korea) |
-| 2148916238 | Child account - needs to be added to a family |
+| Error Code   | Meaning                                          |
+|--------------|--------------------------------------------------|
+| 2148916227   | Account banned from Xbox Live                    |
+| 2148916233   | Microsoft account doesn't have an Xbox account   |
+| 2148916235   | Xbox Live is not available in the user's country |
+| 2148916236/7 | Adult verification required (South Korea)        |
+| 2148916238   | Child account - needs to be added to a family    |
 
 ## Contributing
 
@@ -161,5 +164,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Acknowledgments
 
-- [Keycloak](https://www.keycloak.org/) - Open Source Identity and Access Management
-- [Minecraft Authentication Documentation](https://minecraft.wiki/w/Microsoft_authentication) - Community documentation of the auth flow
+- [Keycloak](https://www.keycloak.org/) – Open Source Identity and Access Management
+- [Minecraft Authentication Documentation](https://minecraft.wiki/w/Microsoft_authentication) – Community documentation of the auth flow

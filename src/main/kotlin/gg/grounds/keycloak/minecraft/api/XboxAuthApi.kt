@@ -10,7 +10,6 @@ import java.net.URI
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
-import org.jboss.logging.Logger
 
 /** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
 class XboxAuthApi {
@@ -48,7 +47,6 @@ class XboxAuthApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.errorf("Xbox authentication failed (status=%d)", response.statusCode())
             throw IOException("Xbox authentication failed with status: ${response.statusCode()}")
         }
 
@@ -84,8 +82,6 @@ class XboxAuthApi {
         val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            logger.warnf("XSTS token request failed (status=%d)", response.statusCode())
-
             if (response.statusCode() == 401) {
                 try {
                     val error =
@@ -113,8 +109,8 @@ class XboxAuthApi {
     data class XboxAuthResponse
     @JsonCreator
     constructor(
-        @JsonProperty("Token") val token: String,
-        @JsonProperty("DisplayClaims") val displayClaims: DisplayClaims?,
+        @param:JsonProperty("Token") val token: String,
+        @param:JsonProperty("DisplayClaims") val displayClaims: DisplayClaims?,
     ) {
         val userHash: String?
             get() = displayClaims?.xui?.firstOrNull()?.uhs
@@ -127,31 +123,33 @@ class XboxAuthApi {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class DisplayClaims @JsonCreator constructor(@JsonProperty("xui") val xui: List<XuiClaim>?)
+    data class DisplayClaims
+    @JsonCreator
+    constructor(@param:JsonProperty("xui") val xui: List<XuiClaim>?)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class XuiClaim
     @JsonCreator
     constructor(
-        @JsonProperty("uhs") val uhs: String?,
-        @JsonProperty("gtg") val gtg: String?,
-        @JsonProperty("xid") val xid: String?,
+        @param:JsonProperty("uhs") val uhs: String?,
+        @param:JsonProperty("gtg") val gtg: String?,
+        @param:JsonProperty("xid") val xid: String?,
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class XstsErrorResponse
     @JsonCreator
     constructor(
-        @JsonProperty("XErr") val xErr: Long = 0,
-        @JsonProperty("Message") val message: String?,
-        @JsonProperty("Redirect") val redirect: String?,
+        @param:JsonProperty("XErr") val xErr: Long = 0,
+        @param:JsonProperty("Message") val message: String?,
+        @param:JsonProperty("Redirect") val redirect: String?,
     )
 
     /**
      * Exception for known Xbox Live authentication error codes. Includes redirect URL in the
-     * message where provided (e.g. child-account setup links).
+     * message where provided (e.g., child-account setup links).
      */
-    class XboxAuthException(val errorCode: Long, val redirectUrl: String?) :
+    class XboxAuthException(errorCode: Long, redirectUrl: String?) :
         IOException(buildMessage(errorCode, redirectUrl)) {
 
         companion object {
@@ -174,7 +172,6 @@ class XboxAuthApi {
     }
 
     companion object {
-        private val logger = Logger.getLogger(XboxAuthApi::class.java)
         private const val XBOX_USER_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
         private const val XBOX_XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
         // Shared, thread-safe after configuration

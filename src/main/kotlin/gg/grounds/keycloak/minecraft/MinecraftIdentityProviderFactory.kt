@@ -36,17 +36,21 @@ class MinecraftIdentityProviderFactory :
 
         when {
             spiClientId != null && spiClientSecret != null ->
-                logger.info("Loaded client credentials from SPI configuration")
+                logger.info(
+                    "Loaded SPI credentials successfully (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=true)"
+                )
             spiClientId != null ->
                 logger.warn(
-                    "Incomplete SPI configuration (clientId=present, clientSecret=missing)"
+                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=false)"
                 )
             spiClientSecret != null ->
                 logger.warn(
-                    "Incomplete SPI configuration (clientId=missing, clientSecret=present)"
+                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=true)"
                 )
             else ->
-                logger.debug("No SPI-level credentials configured, using Admin UI values")
+                logger.debug(
+                    "Loaded SPI credentials skipped (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=false)"
+                )
         }
     }
 

@@ -1,14 +1,23 @@
+import org.gradle.api.publish.maven.MavenPublication
+
 plugins {
-    id("gg.grounds.kotlin-conventions") version "0.3.2"
+    kotlin("jvm") version "2.2.21"
+    id("com.diffplug.spotless") version "8.2.1"
     id("com.gradleup.shadow") version "8.3.5"
+    `maven-publish`
 }
 
-// Override JVM 24 from base-conventions — Keycloak 26.x runs on Java 21
+group = "gg.grounds"
+
+val versionOverride = project.findProperty("versionOverride") as? String
+
+version = versionOverride ?: "local-SNAPSHOT"
+
+repositories { mavenCentral() }
+
 kotlin { jvmToolchain(21) }
 
-version = "1.1.0"
-
-val keycloakVersion = "26.5.4"
+val keycloakVersion = "26.5.6"
 
 dependencies {
     compileOnly(platform("org.keycloak:keycloak-parent:$keycloakVersion"))
@@ -19,11 +28,42 @@ dependencies {
     compileOnly("org.jboss.logging:jboss-logging")
 }
 
+spotless {
+    kotlin {
+        ktfmt().googleStyle().configure {
+            it.setBlockIndent(4)
+            it.setContinuationIndent(4)
+        }
+        targetExclude("**/build/**")
+    }
+    kotlinGradle {
+        ktfmt().googleStyle().configure {
+            it.setBlockIndent(4)
+            it.setContinuationIndent(4)
+        }
+        targetExclude("**/build/**")
+    }
+}
+
 tasks.shadowJar {
     archiveBaseName.set("keycloak-minecraft")
     archiveClassifier.set("")
     archiveVersion.set("")
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+}
+
+publishing {
+    publications { create<MavenPublication>("java") { artifact(tasks.shadowJar) } }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/groundsgg/${rootProject.name}")
+            credentials {
+                username = providers.gradleProperty("github.user").orNull
+                password = providers.gradleProperty("github.token").orNull
+            }
+        }
+    }
 }
 
 tasks.assemble { dependsOn(tasks.shadowJar) }
