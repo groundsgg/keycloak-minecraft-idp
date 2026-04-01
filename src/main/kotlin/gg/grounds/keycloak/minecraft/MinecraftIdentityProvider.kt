@@ -71,6 +71,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
             val userHash =
                 xstsResponse.userHash
                     ?: throw IdentityBrokerException("XSTS response did not return a user hash")
+            val stableBrokerUserId = resolveStableBrokerUserId(xboxUserId, userHash)
 
             // Step 3: Authenticate with Minecraft services
             val mcAuthResponse = minecraftApi.authenticateWithMinecraft(userHash, xstsToken)
@@ -86,7 +87,13 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                     logger.info(
                         "Resolved Minecraft identity successfully (provider=$PROVIDER_ID, edition=java)"
                     )
-                    buildJavaIdentity(profile, xboxGamertag, xboxUserId, ownership)
+                    buildJavaIdentity(
+                        profile,
+                        stableBrokerUserId,
+                        xboxGamertag,
+                        xboxUserId,
+                        ownership,
+                    )
                 } catch (e: MinecraftApi.MinecraftProfileNotFoundException) {
                     if (ownership.ownsBedrockEdition) {
                         logger.warnf(
@@ -94,7 +101,12 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                             "Resolved Minecraft Java profile missing; falling back to Bedrock identity (provider=%s)",
                             PROVIDER_ID,
                         )
-                        buildBedrockIdentity(xboxGamertag, xboxUserId, ownership)
+                        buildBedrockIdentity(
+                            stableBrokerUserId,
+                            xboxGamertag,
+                            xboxUserId,
+                            ownership,
+                        )
                     } else {
                         // Game Pass user who has never opened the launcher — profile setup required
                         logger.warnf(
@@ -110,7 +122,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                     }
                 }
             } else if (ownership.ownsBedrockEdition) {
-                return buildBedrockIdentity(xboxGamertag, xboxUserId, ownership)
+                return buildBedrockIdentity(stableBrokerUserId, xboxGamertag, xboxUserId, ownership)
             } else {
                 throw IdentityBrokerException(
                     "This Microsoft account does not have a Minecraft Java or Bedrock entitlement."
@@ -145,13 +157,14 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
 
     private fun buildJavaIdentity(
         profile: MinecraftApi.MinecraftProfile,
+        brokerUserId: String,
         xboxGamertag: String?,
         xboxUserId: String?,
         ownership: MinecraftApi.Ownership,
     ): BrokeredIdentityContext =
-        BrokeredIdentityContext(profile.formattedUuid, config).apply {
+        BrokeredIdentityContext(brokerUserId, config).apply {
             username = profile.name
-            brokerUserId = profile.formattedUuid
+            this.brokerUserId = brokerUserId
             setOwnershipAttributes(ownership)
             setUserAttribute("minecraft_login_identity", "java")
             setUserAttribute("minecraft_java_uuid", profile.id)
@@ -161,6 +174,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
         }
 
     private fun buildBedrockIdentity(
+        brokerUserId: String,
         xboxGamertag: String?,
         xboxUserId: String?,
         ownership: MinecraftApi.Ownership,
@@ -168,26 +182,23 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
         if (xboxGamertag.isNullOrBlank()) {
             throw IdentityBrokerException("Could not retrieve Xbox Gamertag for Bedrock user")
         }
-        // Fix #2: throw instead of hashCode() — xboxUserId must be present for a stable identity
-        val uniqueId =
-            xboxUserId?.let { "xbox-$it" }
-                ?: throw IdentityBrokerException(
-                    "Could not retrieve a stable Xbox User ID for Bedrock user"
-                )
 
         logger.info(
             "Resolved Minecraft identity successfully (provider=$PROVIDER_ID, edition=bedrock)"
         )
 
-        return BrokeredIdentityContext(uniqueId, config).apply {
+        return BrokeredIdentityContext(brokerUserId, config).apply {
             username = xboxGamertag
-            brokerUserId = uniqueId
+            this.brokerUserId = brokerUserId
             setOwnershipAttributes(ownership)
             setUserAttribute("minecraft_login_identity", "bedrock")
             setUserAttribute("xbox_gamertag", xboxGamertag)
             setUserAttribute("xbox_user_id", xboxUserId)
         }
     }
+
+    private fun resolveStableBrokerUserId(xboxUserId: String?, userHash: String): String =
+        xboxUserId?.let { "xbox-$it" } ?: "xboxuhs-$userHash"
 
     private fun BrokeredIdentityContext.setOwnershipAttributes(ownership: MinecraftApi.Ownership) {
         setUserAttribute("minecraft_java_owned", ownership.ownsJavaEdition.toString())
