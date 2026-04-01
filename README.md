@@ -1,6 +1,6 @@
 # Keycloak Minecraft Identity Provider (keycloak-minecraft-idp)
 
-A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and stores the Minecraft player name as the primary username.
+A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and uses the Minecraft Java player name when available, otherwise the Xbox Gamertag, as the primary username.
 
 ## Features
 
@@ -94,20 +94,34 @@ You need a Microsoft Azure App Registration:
    - **Client ID**: The Application (client) ID from your Azure App
    - **Client Secret**: The Client Secret from your Azure App
 
+### Optional Server-Level Credentials
+
+Instead of storing the Microsoft client credentials in the realm database, you can provide them at the Keycloak server level:
+
+- `KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID`
+- `KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET`
+
+Or with `kc.sh` flags:
+
+- `--spi-identity-provider-minecraft-client-id=<value>`
+- `--spi-identity-provider-minecraft-client-secret=<value>`
+
+If both are set, values entered in the Keycloak admin UI take precedence over the server-level defaults.
+
 ## User Attributes
 
 After successful authentication, the following attributes are stored:
 
-| Attribute            | Description                                                        |
-|----------------------|--------------------------------------------------------------------|
+| Attribute                  | Description                                                  |
+|----------------------------|--------------------------------------------------------------|
 | `username`                 | Primary Keycloak username: Java player name or Xbox Gamertag |
 | `minecraft_login_identity` | `java` or `bedrock` - which identity was used for login      |
-| `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected     |
-| `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected  |
-| `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)             |
-| `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)    |
-| `xbox_gamertag`            | The player's Xbox Gamertag                                    |
-| `xbox_user_id`             | The Xbox User ID (if available)                               |
+| `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected    |
+| `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected |
+| `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)            |
+| `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)   |
+| `xbox_gamertag`            | The player's Xbox Gamertag                                   |
+| `xbox_user_id`             | The Xbox User ID (if available)                              |
 
 ### Java Edition vs. Bedrock Edition
 
@@ -147,7 +161,9 @@ Keycloak will be available at http://localhost:8080.
 
 ### "This Microsoft account does not own Minecraft Java Edition"
 
-The user doesn't have Minecraft Java Edition on their Microsoft account. They will be authenticated with their Xbox Gamertag instead.
+If the user does not own Java Edition but does own Bedrock Edition, they will be authenticated with their Xbox Gamertag instead.
+
+If the account owns neither Java nor Bedrock, authentication fails.
 
 ### Xbox Live Errors
 
