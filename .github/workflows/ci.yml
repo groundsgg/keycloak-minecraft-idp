@@ -46,6 +46,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: keycloak-minecraft
-          path: build/libs/keycloak-minecraft.jar
+          name: keycloak-minecraft-idp
+          path: build/libs/keycloak-minecraft-idp.jar
           retention-days: 30

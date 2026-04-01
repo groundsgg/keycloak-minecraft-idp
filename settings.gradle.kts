@@ -1,1 +1,1 @@
-rootProject.name = "keycloak-minecraft"
+rootProject.name = "keycloak-minecraft-idp"

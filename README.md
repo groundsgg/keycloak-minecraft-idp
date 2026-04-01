@@ -1,4 +1,4 @@
-# Keycloak Minecraft Identity Provider
+# Keycloak Minecraft Identity Provider (keycloak-minecraft-idp)
 
 A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and stores the Minecraft player name as the primary username.
 
@@ -14,7 +14,7 @@ A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xb
 
 ### Download
 
-Download the latest JAR from the [Releases](https://github.com/groundsgg/keycloak-minecraft/releases) page.
+Download the latest JAR from the [Releases](https://github.com/groundsgg/keycloak-minecraft-idp/releases) page.
 
 Or build from source:
 
@@ -27,7 +27,7 @@ Or build from source:
 1. Copy the JAR to your Keycloak providers directory:
 
 ```bash
-cp keycloak-minecraft.jar /opt/keycloak/providers/
+cp keycloak-minecraft-idp.jar /opt/keycloak/providers/
 ```
 
 2. Rebuild Keycloak:
@@ -130,7 +130,7 @@ docker compose up -d
 
 `java -version` must report Java 21 before running the Gradle build.
 
-The development compose file mounts `../build/libs/keycloak-minecraft.jar` into the upstream Keycloak image and runs `kc.sh build` before `start-dev`.
+The development compose file mounts `../build/libs/keycloak-minecraft-idp.jar` into the upstream Keycloak image and runs `kc.sh build` before `start-dev`.
 
 Keycloak will be available at http://localhost:8080.
 - **Admin Username**: admin

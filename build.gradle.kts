@@ -46,7 +46,7 @@ spotless {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("keycloak-minecraft")
+    archiveBaseName.set("keycloak-minecraft-idp")
     archiveClassifier.set("")
     archiveVersion.set("")
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")

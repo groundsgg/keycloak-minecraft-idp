@@ -13,7 +13,7 @@ services:
       KC_DB: dev-file
     volumes:
       # Mount the locally built provider JAR into Keycloak
-      - ../build/libs/keycloak-minecraft.jar:/opt/keycloak/providers/keycloak-minecraft.jar:ro
+      - ../build/libs/keycloak-minecraft-idp.jar:/opt/keycloak/providers/keycloak-minecraft-idp.jar:ro
       # Persist H2 database
       - keycloak-data:/opt/keycloak/data
     ports:

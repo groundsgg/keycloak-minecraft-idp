@@ -61,6 +61,6 @@ jobs:
           generate_release_notes: true
           tag_name: v${{ steps.version.outputs.VERSION }}
           files: |
-            build/libs/keycloak-minecraft.jar
+            build/libs/keycloak-minecraft-idp.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
