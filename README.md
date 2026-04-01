@@ -106,6 +106,8 @@ Or with `kc.sh` flags:
 - `--spi-identity-provider-minecraft-client-id=<value>`
 - `--spi-identity-provider-minecraft-client-secret=<value>`
 
+When these server-level values are configured, the **Client ID** and **Client Secret** fields in the Keycloak admin UI may be left empty.
+
 If both are set, values entered in the Keycloak admin UI take precedence over the server-level defaults.
 
 ## User Attributes

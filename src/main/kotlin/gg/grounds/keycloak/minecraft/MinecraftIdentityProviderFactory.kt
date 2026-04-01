@@ -5,8 +5,6 @@ import org.keycloak.Config
 import org.keycloak.broker.provider.AbstractIdentityProviderFactory
 import org.keycloak.models.IdentityProviderModel
 import org.keycloak.models.KeycloakSession
-import org.keycloak.provider.ProviderConfigProperty
-import org.keycloak.provider.ProviderConfigurationBuilder
 
 /**
  * Factory for creating Minecraft Identity Provider instances.
@@ -68,31 +66,6 @@ class MinecraftIdentityProviderFactory :
         )
 
     override fun createConfig(): MinecraftIdentityProviderConfig = MinecraftIdentityProviderConfig()
-
-    override fun getConfigProperties(): List<ProviderConfigProperty> =
-        ProviderConfigurationBuilder.create()
-            .property()
-            .name("clientId")
-            .label("Client ID")
-            .helpText(
-                "The Client ID from your Microsoft Azure App Registration. " +
-                    "Leave blank to use the server-level value from " +
-                    "KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID."
-            )
-            .type(ProviderConfigProperty.STRING_TYPE)
-            .add()
-            .property()
-            .name("clientSecret")
-            .label("Client Secret")
-            .helpText(
-                "The Client Secret from your Microsoft Azure App Registration. " +
-                    "Leave blank to use the server-level value from " +
-                    "KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET."
-            )
-            .type(ProviderConfigProperty.PASSWORD)
-            .secret(true)
-            .add()
-            .build()
 
     companion object {
         const val PROVIDER_ID = "minecraft"

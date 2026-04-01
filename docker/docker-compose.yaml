@@ -19,7 +19,7 @@ services:
     ports:
       - "8080:8080"
     entrypoint: ["/bin/sh", "-c"]
-    command: /opt/keycloak/bin/kc.sh build && exec /opt/keycloak/bin/kc.sh start-dev
+    command: ["/opt/keycloak/bin/kc.sh build && exec /opt/keycloak/bin/kc.sh start-dev"]
 
 volumes:
   keycloak-data:

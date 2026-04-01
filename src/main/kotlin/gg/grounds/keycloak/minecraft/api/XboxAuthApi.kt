@@ -86,7 +86,7 @@ class XboxAuthApi {
                 try {
                     val error =
                         objectMapper.readValue(response.body(), XstsErrorResponse::class.java)
-                    throw XboxAuthException(error.xErr, error.redirect)
+                    throw XboxAuthException(error.xErr, error.message, error.redirect)
                 } catch (e: JsonProcessingException) {
                     throw IOException(
                         "XSTS authentication failed with status 401, body: ${response.body()}",
@@ -149,8 +149,11 @@ class XboxAuthApi {
      * Exception for known Xbox Live authentication error codes. Includes redirect URL in the
      * message where provided (e.g., child-account setup links).
      */
-    class XboxAuthException(errorCode: Long, redirectUrl: String?) :
-        IOException(buildMessage(errorCode, redirectUrl)) {
+    class XboxAuthException(
+        val errorCode: Long,
+        val rawMessage: String?,
+        val redirectUrl: String?,
+    ) : IOException(buildMessage(errorCode, redirectUrl)) {
 
         companion object {
             fun buildMessage(errorCode: Long, redirectUrl: String?): String {

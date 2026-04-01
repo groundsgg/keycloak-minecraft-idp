@@ -55,9 +55,12 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                 } catch (e: XboxAuthApi.XboxAuthException) {
                     logger.warnf(
                         e,
-                        "Requested XSTS token failed (provider=%s, reason=%s)",
+                        "Requested XSTS token failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
                         PROVIDER_ID,
+                        e.errorCode,
                         e.message ?: e.javaClass.simpleName,
+                        e.rawMessage,
+                        e.redirectUrl,
                     )
                     throw IdentityBrokerException(e.message, e)
                 }
@@ -131,9 +134,12 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
         } catch (e: XboxAuthApi.XboxAuthException) {
             logger.warnf(
                 e,
-                "Authenticated with Xbox failed (provider=%s, reason=%s)",
+                "Authenticated with Xbox failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
                 PROVIDER_ID,
+                e.errorCode,
                 e.message ?: e.javaClass.simpleName,
+                e.rawMessage,
+                e.redirectUrl,
             )
             throw IdentityBrokerException(e.message, e)
         } catch (e: IOException) {
@@ -167,7 +173,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
             this.brokerUserId = brokerUserId
             setOwnershipAttributes(ownership)
             setUserAttribute("minecraft_login_identity", "java")
-            setUserAttribute("minecraft_java_uuid", profile.id)
+            setUserAttribute("minecraft_java_uuid", profile.formattedUuid)
             setUserAttribute("minecraft_java_username", profile.name)
             xboxGamertag?.let { setUserAttribute("xbox_gamertag", it) }
             xboxUserId?.let { setUserAttribute("xbox_user_id", it) }
