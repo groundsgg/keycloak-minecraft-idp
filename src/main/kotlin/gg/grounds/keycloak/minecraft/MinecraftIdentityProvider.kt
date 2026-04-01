@@ -193,7 +193,7 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
             setOwnershipAttributes(ownership)
             setUserAttribute("minecraft_login_identity", "bedrock")
             setUserAttribute("xbox_gamertag", xboxGamertag)
-            setUserAttribute("xbox_user_id", xboxUserId)
+            xboxUserId?.let { setUserAttribute("xbox_user_id", it) }
         }
     }
 
@@ -208,8 +208,23 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
     override fun getProfileEndpointForValidation(event: EventBuilder?): String? = null
 
     /** Use POST body for client credentials — Microsoft does not support HTTP Basic Auth here. */
-    override fun authenticateTokenRequest(tokenRequest: SimpleHttpRequest): SimpleHttpRequest =
-        tokenRequest.param("client_id", config.clientId).param("client_secret", config.clientSecret)
+    override fun authenticateTokenRequest(tokenRequest: SimpleHttpRequest): SimpleHttpRequest {
+        val clientId = requireConfiguredCredential("clientId", config.clientId)
+        val clientSecret = requireConfiguredCredential("clientSecret", config.clientSecret)
+
+        return tokenRequest.param("client_id", clientId).param("client_secret", clientSecret)
+    }
+
+    private fun requireConfiguredCredential(name: String, value: String?): String =
+        value?.takeIf { it.isNotBlank() }
+            ?: throw IdentityBrokerException(
+                "Minecraft identity provider is missing `$name`. " +
+                    "Configure it in the Admin UI or via SPI " +
+                    "(KC_SPI_IDENTITY_PROVIDER_MINECRAFT_${name.toScreamingSnakeCase()})."
+            )
+
+    private fun String.toScreamingSnakeCase(): String =
+        replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").uppercase()
 
     companion object {
         const val PROVIDER_ID = "minecraft"
