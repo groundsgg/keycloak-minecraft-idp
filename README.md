@@ -57,7 +57,7 @@ sequenceDiagram
     Xbox-->>Keycloak: XSTS Token
     Keycloak->>MC: Authenticate with Minecraft
     MC-->>Keycloak: Minecraft Token
-    Keycloak->>MC: Check entitlements (/entitlements/mcstore)
+    Keycloak->>MC: Check entitlements (/entitlements/license)
     MC-->>Keycloak: Owned products
     alt Owns Java Edition
         Keycloak->>MC: Get Profile
@@ -100,19 +100,26 @@ After successful authentication, the following attributes are stored:
 
 | Attribute            | Description                                                        |
 |----------------------|--------------------------------------------------------------------|
-| `username`           | Minecraft player name or Xbox Gamertag (primary Keycloak username) |
-| `minecraft_username` | The Minecraft player name or Xbox Gamertag                         |
-| `minecraft_edition`  | `java` or `bedrock` - which identity path was used for login       |
-| `minecraft_uuid`     | The Minecraft UUID (only for Java Edition)                         |
-| `xbox_gamertag`      | The player's Xbox Gamertag                                         |
-| `xbox_user_id`       | The Xbox User ID (if available)                                    |
+| `username`                 | Primary Keycloak username: Java player name or Xbox Gamertag |
+| `minecraft_login_identity` | `java` or `bedrock` - which identity was used for login      |
+| `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected     |
+| `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected  |
+| `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)             |
+| `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)    |
+| `xbox_gamertag`            | The player's Xbox Gamertag                                    |
+| `xbox_user_id`             | The Xbox User ID (if available)                               |
 
 ### Java Edition vs. Bedrock Edition
 
-- **Java Edition**: Players with Minecraft Java Edition get their Java player name and UUID
-- **Bedrock Edition**: Players without Java Edition (Bedrock only) get their Xbox Gamertag as their username
+- **Java Edition**: Players with Java entitlement and a Java profile get their Java player name and UUID
+- **Bedrock Edition**: Players with Bedrock entitlement can log in with their Xbox Gamertag
 
-If a player owns both editions, the plugin resolves them as `java`. `minecraft_edition` reflects the identity path used for login, not the full set of editions the account owns.
+If a player owns both editions, the plugin prefers `java` as the login identity when a Java profile exists. If Java is owned but no Java profile exists yet, the plugin falls back to `bedrock` only when a Bedrock entitlement is also present.
+
+The ownership flags and the login identity are intentionally separate:
+
+- `minecraft_java_owned` and `minecraft_bedrock_owned` describe what the account owns
+- `minecraft_login_identity` describes which identity path was used for this login
 
 ## Local Development
 

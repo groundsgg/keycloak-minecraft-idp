@@ -11,7 +11,9 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import org.jboss.logging.Logger
 
-/** Handles Minecraft Services API calls: authentication, ownership check, and profile retrieval. */
+/**
+ * Handles Minecraft Services API calls: authentication, entitlement checks, and profile retrieval.
+ */
 class MinecraftApi {
 
     /** Authenticates with Minecraft services using the Xbox XSTS token. */
@@ -42,18 +44,11 @@ class MinecraftApi {
         return objectMapper.readValue(response.body(), MinecraftAuthResponse::class.java)
     }
 
-    /**
-     * Checks Java Edition ownership via the entitlement's endpoint.
-     *
-     * More reliable than relying on the profile endpoint returning 404: Game Pass users who haven't
-     * launched the game yet also get a 404 on /minecraft/profile despite owning the game.
-     *
-     * Returns true if the account has a Minecraft Java Edition entitlement.
-     */
-    fun checkOwnership(minecraftAccessToken: String): Boolean {
+    /** Resolves Minecraft entitlements for the authenticated account. */
+    fun getOwnership(minecraftAccessToken: String): Ownership {
         val request =
             HttpRequest.newBuilder()
-                .uri(URI.create(MINECRAFT_ENTITLEMENTS_URL))
+                .uri(URI.create(MINECRAFT_LICENSES_URL))
                 .header("Authorization", "Bearer $minecraftAccessToken")
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(30))
@@ -67,13 +62,20 @@ class MinecraftApi {
         }
 
         val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
-        val ownsJava = entitlements.items?.any { it.name in JAVA_EDITION_ENTITLEMENTS } ?: false
+        val entitlementNames = entitlements.items?.map { it.name }?.toSet().orEmpty()
+        val ownership =
+            Ownership(
+                entitlementNames = entitlementNames,
+                ownsJavaEdition = entitlementNames.any { it in JAVA_EDITION_ENTITLEMENTS },
+                ownsBedrockEdition = entitlementNames.any { it in BEDROCK_EDITION_ENTITLEMENTS },
+            )
         logger.debugf(
-            "Checked Java Edition ownership (entitlementNames=%s, ownsJava=%b)",
-            entitlements.items?.map { it.name },
-            ownsJava,
+            "Checked Minecraft ownership (entitlementNames=%s, ownsJava=%b, ownsBedrock=%b)",
+            entitlementNames,
+            ownership.ownsJavaEdition,
+            ownership.ownsBedrockEdition,
         )
-        return ownsJava
+        return ownership
     }
 
     /**
@@ -132,6 +134,12 @@ class MinecraftApi {
     @JsonCreator
     constructor(@param:JsonProperty("name") val name: String)
 
+    data class Ownership(
+        val entitlementNames: Set<String>,
+        val ownsJavaEdition: Boolean,
+        val ownsBedrockEdition: Boolean,
+    )
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class MinecraftProfile
     @JsonCreator
@@ -181,12 +189,16 @@ class MinecraftApi {
         internal val objectMapper: ObjectMapper = ObjectMapper()
         private const val MINECRAFT_AUTH_URL =
             "https://api.minecraftservices.com/authentication/login_with_xbox"
-        private const val MINECRAFT_ENTITLEMENTS_URL =
-            "https://api.minecraftservices.com/entitlements/mcstore"
+        private const val MINECRAFT_LICENSES_URL =
+            "https://api.minecraftservices.com/entitlements/license"
         private const val MINECRAFT_PROFILE_URL =
             "https://api.minecraftservices.com/minecraft/profile"
 
         /** Entitlement item names that indicate Java Edition ownership. */
         private val JAVA_EDITION_ENTITLEMENTS = setOf("product_minecraft", "game_minecraft")
+
+        /** Entitlement item names that indicate Bedrock Edition ownership. */
+        private val BEDROCK_EDITION_ENTITLEMENTS =
+            setOf("product_minecraft_bedrock", "game_minecraft_bedrock")
     }
 }
