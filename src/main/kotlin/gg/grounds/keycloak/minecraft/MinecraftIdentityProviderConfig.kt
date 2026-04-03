@@ -2,6 +2,7 @@ package gg.grounds.keycloak.minecraft
 
 import org.keycloak.broker.oidc.OAuth2IdentityProviderConfig
 import org.keycloak.models.IdentityProviderModel
+import org.keycloak.models.RealmModel
 
 /**
  * Configuration for the Minecraft Identity Provider.
@@ -24,6 +25,12 @@ class MinecraftIdentityProviderConfig(
 
     constructor() : this(IdentityProviderModel())
 
+    var syncRealName: Boolean
+        get() = config[SYNC_REAL_NAME]?.toBooleanStrictOrNull() ?: false
+        set(value) {
+            config[SYNC_REAL_NAME] = value.toString()
+        }
+
     /** Admin UI value takes precedence; falls back to SPI/env-var value. */
     override fun getClientId(): String? =
         super.getClientId()?.takeIf { it.isNotBlank() } ?: spiClientId
@@ -36,5 +43,25 @@ class MinecraftIdentityProviderConfig(
 
     override fun getTokenUrl(): String = "https://login.live.com/oauth20_token.srf"
 
-    override fun getDefaultScope(): String = "XboxLive.signin offline_access"
+    override fun getDefaultScope(): String = "XboxLive.signin offline_access openid profile email"
+
+    override fun validate(realm: RealmModel) {
+        super.validate(realm)
+        requireSupportedClientAuthMethod()
+    }
+
+    internal fun requireSupportedClientAuthMethod() {
+        val configuredClientAuthMethod = clientAuthMethod
+
+        require(configuredClientAuthMethod == CLIENT_SECRET_POST) {
+            "Minecraft identity provider supports only `$CLIENT_SECRET_POST` " +
+                "for the Microsoft token endpoint " +
+                "(configuredClientAuthMethod=$configuredClientAuthMethod)."
+        }
+    }
+
+    companion object {
+        internal const val CLIENT_SECRET_POST = "client_secret_post"
+        internal const val SYNC_REAL_NAME = "syncRealName"
+    }
 }

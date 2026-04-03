@@ -9,6 +9,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
+      KC_LOG_LEVEL: DEBUG
       # Database (using embedded H2 for development)
       KC_DB: dev-file
     volumes:

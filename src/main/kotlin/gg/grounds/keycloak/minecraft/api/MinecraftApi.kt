@@ -14,10 +14,27 @@ import org.jboss.logging.Logger
 /**
  * Handles Minecraft Services API calls: authentication, entitlement checks, and profile retrieval.
  */
-class MinecraftApi {
+interface MinecraftClient {
+    fun authenticateWithMinecraft(
+        userHash: String,
+        xstsToken: String,
+    ): MinecraftApi.MinecraftAuthResponse
+
+    fun getOwnership(minecraftAccessToken: String): MinecraftApi.Ownership
+
+    fun getProfile(minecraftAccessToken: String): MinecraftApi.MinecraftProfile
+}
+
+/**
+ * Handles Minecraft Services API calls: authentication, entitlement checks, and profile retrieval.
+ */
+class MinecraftApi : MinecraftClient {
 
     /** Authenticates with Minecraft services using the Xbox XSTS token. */
-    fun authenticateWithMinecraft(userHash: String, xstsToken: String): MinecraftAuthResponse {
+    override fun authenticateWithMinecraft(
+        userHash: String,
+        xstsToken: String,
+    ): MinecraftAuthResponse {
         val requestBody = mapOf("identityToken" to "XBL3.0 x=$userHash;$xstsToken")
 
         val request =
@@ -45,7 +62,7 @@ class MinecraftApi {
     }
 
     /** Resolves Minecraft entitlements for the authenticated account. */
-    fun getOwnership(minecraftAccessToken: String): Ownership {
+    override fun getOwnership(minecraftAccessToken: String): Ownership {
         val request =
             HttpRequest.newBuilder()
                 .uri(URI.create(MINECRAFT_LICENSES_URL))
@@ -63,12 +80,7 @@ class MinecraftApi {
 
         val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
         val entitlementNames = entitlements.items?.map { it.name }?.toSet().orEmpty()
-        val ownership =
-            Ownership(
-                entitlementNames = entitlementNames,
-                ownsJavaEdition = entitlementNames.any { it in JAVA_EDITION_ENTITLEMENTS },
-                ownsBedrockEdition = entitlementNames.any { it in BEDROCK_EDITION_ENTITLEMENTS },
-            )
+        val ownership = resolveOwnership(entitlementNames)
         logger.debugf(
             "Checked Minecraft ownership (entitlementNames=%s, ownsJava=%b, ownsBedrock=%b)",
             entitlementNames,
@@ -84,7 +96,7 @@ class MinecraftApi {
      * Throws [MinecraftProfileNotFoundException] when the profile does not exist yet, e.g., a Game
      * Pass user who hasn't launched the game through the official launcher.
      */
-    fun getProfile(minecraftAccessToken: String): MinecraftProfile {
+    override fun getProfile(minecraftAccessToken: String): MinecraftProfile {
         val request =
             HttpRequest.newBuilder()
                 .uri(URI.create(MINECRAFT_PROFILE_URL))
@@ -193,6 +205,13 @@ class MinecraftApi {
             "https://api.minecraftservices.com/entitlements/license"
         private const val MINECRAFT_PROFILE_URL =
             "https://api.minecraftservices.com/minecraft/profile"
+
+        internal fun resolveOwnership(entitlementNames: Set<String>): Ownership =
+            Ownership(
+                entitlementNames = entitlementNames,
+                ownsJavaEdition = entitlementNames.any { it in JAVA_EDITION_ENTITLEMENTS },
+                ownsBedrockEdition = entitlementNames.any { it in BEDROCK_EDITION_ENTITLEMENTS },
+            )
 
         /** Entitlement item names that indicate Java Edition ownership. */
         private val JAVA_EDITION_ENTITLEMENTS = setOf("product_minecraft", "game_minecraft")

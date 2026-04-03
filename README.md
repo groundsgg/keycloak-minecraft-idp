@@ -94,6 +94,9 @@ You need a Microsoft Azure App Registration:
    - **Client ID**: The Application (client) ID from your Azure App
    - **Client Secret**: The Client Secret from your Azure App
 
+This provider supports only the OAuth client authentication method `client_secret_post`.
+Do not enable Basic or JWT-based client authentication modes for this identity provider.
+
 ### Optional Server-Level Credentials
 
 Instead of storing the Microsoft client credentials in the realm database, you can provide them at the Keycloak server level:
@@ -109,6 +112,8 @@ Or with `kc.sh` flags:
 When these server-level values are configured, the **Client ID** and **Client Secret** fields in the Keycloak admin UI may be left empty.
 
 If both are set, values entered in the Keycloak admin UI take precedence over the server-level defaults.
+
+The server-level secret is compatible with this provider's supported `client_secret_post` flow.
 
 ## User Attributes
 

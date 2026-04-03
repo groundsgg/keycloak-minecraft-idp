@@ -12,13 +12,20 @@ import java.net.http.HttpResponse
 import java.time.Duration
 
 /** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
-class XboxAuthApi {
+interface XboxAuthClient {
+    fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthApi.XboxAuthResponse
+
+    fun obtainXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse
+}
+
+/** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
+class XboxAuthApi : XboxAuthClient {
 
     /**
      * Authenticates with Xbox Live using a Microsoft access token. Returns an XboxAuthResponse
      * containing the Xbox User Token and user hash.
      */
-    fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthResponse {
+    override fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthResponse {
         val requestBody =
             mapOf(
                 "Properties" to
@@ -57,7 +64,7 @@ class XboxAuthApi {
      * Obtains an XSTS token scoped to Minecraft services. Throws XboxAuthException for known Xbox
      * Live error codes.
      */
-    fun obtainXstsToken(xboxUserToken: String): XboxAuthResponse {
+    override fun obtainXstsToken(xboxUserToken: String): XboxAuthResponse {
         val requestBody =
             mapOf(
                 "Properties" to

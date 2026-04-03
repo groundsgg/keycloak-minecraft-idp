@@ -26,6 +26,13 @@ dependencies {
     compileOnly("org.keycloak:keycloak-services")
     compileOnly("com.fasterxml.jackson.core:jackson-databind")
     compileOnly("org.jboss.logging:jboss-logging")
+    testImplementation(platform("org.keycloak:keycloak-parent:$keycloakVersion"))
+    testImplementation("org.keycloak:keycloak-server-spi")
+    testImplementation("org.keycloak:keycloak-server-spi-private")
+    testImplementation("org.keycloak:keycloak-services")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind")
+    testImplementation("org.jboss.logging:jboss-logging")
+    testImplementation(kotlin("test"))
 }
 
 spotless {
@@ -67,3 +74,5 @@ publishing {
 }
 
 tasks.assemble { dependsOn(tasks.shadowJar) }
+
+tasks.test { useJUnitPlatform() }

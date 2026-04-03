@@ -2,7 +2,9 @@ package gg.grounds.keycloak.minecraft
 
 import com.fasterxml.jackson.databind.JsonNode
 import gg.grounds.keycloak.minecraft.api.MinecraftApi
+import gg.grounds.keycloak.minecraft.api.MinecraftClient
 import gg.grounds.keycloak.minecraft.api.XboxAuthApi
+import gg.grounds.keycloak.minecraft.api.XboxAuthClient
 import java.io.IOException
 import org.jboss.logging.Logger
 import org.keycloak.broker.oidc.AbstractOAuth2IdentityProvider
@@ -10,21 +12,45 @@ import org.keycloak.broker.provider.BrokeredIdentityContext
 import org.keycloak.broker.provider.IdentityBrokerException
 import org.keycloak.events.EventBuilder
 import org.keycloak.http.simple.SimpleHttpRequest
+import org.keycloak.jose.jws.JWSInput
+import org.keycloak.jose.jws.JWSInputException
+import org.keycloak.models.IdentityProviderSyncMode
 import org.keycloak.models.KeycloakSession
+import org.keycloak.models.RealmModel
+import org.keycloak.models.UserModel
+import org.keycloak.util.JsonSerialization
+import org.keycloak.vault.VaultStringSecret
 
 /**
  * Identity Provider that authenticates users via Microsoft/Xbox OAuth2 and retrieves their
  * Minecraft Java Edition username or Xbox Gamertag (Bedrock).
  */
-class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdentityProviderConfig) :
-    AbstractOAuth2IdentityProvider<MinecraftIdentityProviderConfig>(session, config) {
-
-    private val xboxAuthApi = XboxAuthApi()
-    private val minecraftApi = MinecraftApi()
+class MinecraftIdentityProvider(
+    session: KeycloakSession,
+    config: MinecraftIdentityProviderConfig,
+    private val xboxAuthClient: XboxAuthClient = XboxAuthApi(),
+    private val minecraftClient: MinecraftClient = MinecraftApi(),
+) : AbstractOAuth2IdentityProvider<MinecraftIdentityProviderConfig>(session, config) {
 
     override fun getDefaultScopes(): String = config.defaultScope
 
     override fun supportsExternalExchange(): Boolean = false
+
+    override fun updateBrokeredUser(
+        session: KeycloakSession,
+        realm: RealmModel,
+        user: UserModel,
+        context: BrokeredIdentityContext,
+    ) {
+        super.updateBrokeredUser(session, realm, user, context)
+        syncBasicProfile(user, context)
+    }
+
+    override fun getFederatedIdentity(response: String): BrokeredIdentityContext {
+        val context = super.getFederatedIdentity(response)
+        extractMicrosoftIdTokenClaims(response)?.let { context.applyMicrosoftProfile(it) }
+        return context
+    }
 
     /**
      * Fix #8/#12: Null-safe fallback — only used if Keycloak routes through this path. Not part of
@@ -47,11 +73,11 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
     override fun doGetFederatedIdentity(accessToken: String): BrokeredIdentityContext {
         try {
             // Step 1: Authenticate with Xbox Live
-            val xboxResponse = xboxAuthApi.authenticateWithXbox(accessToken)
+            val xboxResponse = xboxAuthClient.authenticateWithXbox(accessToken)
             // Step 2: Obtain XSTS token scoped to Minecraft services
             val xstsResponse =
                 try {
-                    xboxAuthApi.obtainXstsToken(xboxResponse.token)
+                    xboxAuthClient.obtainXstsToken(xboxResponse.token)
                 } catch (e: XboxAuthApi.XboxAuthException) {
                     logger.warnf(
                         e,
@@ -77,16 +103,16 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
             val stableBrokerUserId = resolveStableBrokerUserId(xboxUserId, userHash)
 
             // Step 3: Authenticate with Minecraft services
-            val mcAuthResponse = minecraftApi.authenticateWithMinecraft(userHash, xstsToken)
+            val mcAuthResponse = minecraftClient.authenticateWithMinecraft(userHash, xstsToken)
             val minecraftToken = mcAuthResponse.accessToken
 
             // Step 4: Resolve edition ownership via entitlement's endpoint
-            val ownership = minecraftApi.getOwnership(minecraftToken)
+            val ownership = minecraftClient.getOwnership(minecraftToken)
 
             if (ownership.ownsJavaEdition) {
                 return try {
                     // Step 5a: Fetch Java Edition profile
-                    val profile = minecraftApi.getProfile(minecraftToken)
+                    val profile = minecraftClient.getProfile(minecraftToken)
                     logger.info(
                         "Resolved Minecraft identity successfully (provider=$PROVIDER_ID, edition=java)"
                     )
@@ -211,14 +237,42 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
         setUserAttribute("minecraft_bedrock_owned", ownership.ownsBedrockEdition.toString())
     }
 
+    private fun syncBasicProfile(user: UserModel, context: BrokeredIdentityContext) {
+        if (!config.syncRealName) {
+            return
+        }
+
+        val authSession = context.authenticationSession ?: return
+        val isNewUser =
+            authSession.getAuthNote(BROKER_REGISTERED_NEW_USER).toBoolean()
+        val shouldSync = isNewUser || config.syncMode == IdentityProviderSyncMode.FORCE
+
+        if (!shouldSync) {
+            return
+        }
+
+        context.firstName?.takeIf { it != user.firstName }?.let { user.firstName = it }
+        context.lastName?.takeIf { it != user.lastName }?.let { user.lastName = it }
+    }
+
+    private fun BrokeredIdentityContext.applyMicrosoftProfile(idTokenClaims: JsonNode) {
+        idTokenClaims.getClaimText("email")?.let { email = it }
+        if (!config.syncRealName) {
+            return
+        }
+        idTokenClaims.getClaimText("given_name")?.let { firstName = it }
+        idTokenClaims.getClaimText("family_name")?.let { lastName = it }
+    }
+
     override fun getProfileEndpointForValidation(event: EventBuilder?): String? = null
 
-    /** Use POST body for client credentials — Microsoft does not support HTTP Basic Auth here. */
+    /** Use Keycloak's standard token-request handling after enforcing Microsoft's auth mode. */
     override fun authenticateTokenRequest(tokenRequest: SimpleHttpRequest): SimpleHttpRequest {
-        val clientId = requireConfiguredCredential("clientId", config.clientId)
+        config.requireSupportedClientAuthMethod()
+        requireConfiguredCredential("clientId", config.clientId)
         val clientSecret = requireConfiguredCredential("clientSecret", config.clientSecret)
-
-        return tokenRequest.param("client_id", clientId).param("client_secret", clientSecret)
+        requireResolvedVaultSecret("clientSecret", clientSecret)
+        return super.authenticateTokenRequest(tokenRequest)
     }
 
     private fun requireConfiguredCredential(name: String, value: String?): String =
@@ -229,11 +283,61 @@ class MinecraftIdentityProvider(session: KeycloakSession, config: MinecraftIdent
                     "(KC_SPI_IDENTITY_PROVIDER_MINECRAFT_${name.toScreamingSnakeCase()})."
             )
 
+    private fun requireResolvedVaultSecret(name: String, value: String) {
+        if (!value.startsWith(VAULT_REFERENCE_PREFIX)) {
+            return
+        }
+
+        try {
+            session.vault().getStringSecret(value).use { vaultSecret: VaultStringSecret ->
+                if (vaultSecret.get().isEmpty) {
+                    throw IdentityBrokerException(
+                        "Minecraft identity provider could not resolve `$name` from Keycloak vault."
+                    )
+                }
+            }
+        } catch (e: IdentityBrokerException) {
+            throw e
+        } catch (e: RuntimeException) {
+            throw IdentityBrokerException(
+                "Minecraft identity provider could not resolve `$name` from Keycloak vault.",
+                e,
+            )
+        }
+    }
+
+    private fun extractMicrosoftIdTokenClaims(response: String): JsonNode? =
+        try {
+            val tokenResponse = JsonSerialization.readValue(response, OAuthResponse::class.java)
+            val rawIdToken = tokenResponse.idToken ?: return null
+            JsonSerialization.mapper.readTree(JWSInput(rawIdToken).content)
+        } catch (e: IOException) {
+            logger.debugf(
+                e,
+                "Skipped Microsoft ID token extraction (provider=%s, reason=%s)",
+                PROVIDER_ID,
+                e.message ?: e.javaClass.simpleName,
+            )
+            null
+        } catch (e: JWSInputException) {
+            logger.warnf(
+                e,
+                "Failed to parse Microsoft ID token (provider=%s, reason=%s)",
+                PROVIDER_ID,
+                e.message ?: e.javaClass.simpleName,
+            )
+            null
+        }
+
+    private fun JsonNode.getClaimText(name: String): String? =
+        get(name)?.asText()?.takeIf { it.isNotBlank() }
+
     private fun String.toScreamingSnakeCase(): String =
         replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").uppercase()
 
     companion object {
         const val PROVIDER_ID = "minecraft"
+        private const val VAULT_REFERENCE_PREFIX = "vault:"
         private val logger = Logger.getLogger(MinecraftIdentityProvider::class.java)
     }
 }

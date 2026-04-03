@@ -5,6 +5,8 @@ import org.keycloak.Config
 import org.keycloak.broker.provider.AbstractIdentityProviderFactory
 import org.keycloak.models.IdentityProviderModel
 import org.keycloak.models.KeycloakSession
+import org.keycloak.provider.ProviderConfigProperty
+import org.keycloak.provider.ProviderConfigurationBuilder
 
 /**
  * Factory for creating Minecraft Identity Provider instances.
@@ -55,6 +57,20 @@ class MinecraftIdentityProviderFactory :
     override fun getName(): String = PROVIDER_NAME
 
     override fun getId(): String = PROVIDER_ID
+
+    override fun getConfigProperties(): List<ProviderConfigProperty> =
+        ProviderConfigurationBuilder.create()
+            .property()
+            .name(MinecraftIdentityProviderConfig.SYNC_REAL_NAME)
+            .label("Sync Real Name")
+            .helpText(
+                "Imports and stores Microsoft given and family name claims when available. " +
+                    "When disabled, first and last name are ignored."
+            )
+            .type(ProviderConfigProperty.BOOLEAN_TYPE)
+            .defaultValue(false)
+            .add()
+            .build()
 
     override fun create(
         session: KeycloakSession,
