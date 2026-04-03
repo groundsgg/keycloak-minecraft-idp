@@ -29,3 +29,6 @@ Thumbs.db
 # Docker
 docker/providers/keycloak-minecraft.jar
 docker/keycloak-data/
+
+# Codex
+.codex

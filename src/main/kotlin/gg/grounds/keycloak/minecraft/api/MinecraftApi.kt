@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
+import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpRequest
@@ -50,7 +51,8 @@ class MinecraftApi : MinecraftClient {
                 )
                 .build()
 
-        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
             throw IOException(
@@ -72,7 +74,8 @@ class MinecraftApi : MinecraftClient {
                 .GET()
                 .build()
 
-        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
             throw IOException("Entitlements check failed with status: ${response.statusCode()}")
@@ -93,8 +96,9 @@ class MinecraftApi : MinecraftClient {
     /**
      * Gets the Minecraft Java Edition profile (username + UUID).
      *
-     * Throws [MinecraftProfileNotFoundException] when the profile does not exist yet, e.g., a Game
-     * Pass user who hasn't launched the game through the official launcher.
+     * Throws [gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException] when
+     * the profile does not exist yet, e.g., a Game Pass user who hasn't launched the game through
+     * the official launcher.
      */
     override fun getProfile(minecraftAccessToken: String): MinecraftProfile {
         val request =
@@ -106,7 +110,8 @@ class MinecraftApi : MinecraftClient {
                 .GET()
                 .build()
 
-        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() == 404) {
             throw MinecraftProfileNotFoundException(
@@ -191,9 +196,6 @@ class MinecraftApi : MinecraftClient {
         @param:JsonProperty("url") val url: String?,
         @param:JsonProperty("alias") val alias: String?,
     )
-
-    /** Thrown when an account has Java Edition entitlement but no profile yet (e.g., Game Pass). */
-    class MinecraftProfileNotFoundException(message: String) : IOException(message)
 
     companion object {
         private val logger = Logger.getLogger(MinecraftApi::class.java)

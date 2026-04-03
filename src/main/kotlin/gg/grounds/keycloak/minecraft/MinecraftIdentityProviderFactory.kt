@@ -1,5 +1,6 @@
 package gg.grounds.keycloak.minecraft
 
+import gg.grounds.keycloak.minecraft.api.SharedApiClient
 import org.jboss.logging.Logger
 import org.keycloak.Config
 import org.keycloak.broker.provider.AbstractIdentityProviderFactory
@@ -82,6 +83,11 @@ class MinecraftIdentityProviderFactory :
         )
 
     override fun createConfig(): MinecraftIdentityProviderConfig = MinecraftIdentityProviderConfig()
+
+    override fun close() {
+        SharedApiClient.close()
+        super.close()
+    }
 
     companion object {
         const val PROVIDER_ID = "minecraft"

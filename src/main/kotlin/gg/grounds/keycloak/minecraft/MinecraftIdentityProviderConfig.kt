@@ -1,6 +1,7 @@
 package gg.grounds.keycloak.minecraft
 
 import org.keycloak.broker.oidc.OAuth2IdentityProviderConfig
+import org.keycloak.broker.provider.IdentityBrokerException
 import org.keycloak.models.IdentityProviderModel
 import org.keycloak.models.RealmModel
 
@@ -54,11 +55,24 @@ class MinecraftIdentityProviderConfig(
         val configuredClientAuthMethod = clientAuthMethod
 
         require(configuredClientAuthMethod == CLIENT_SECRET_POST) {
-            "Minecraft identity provider supports only `$CLIENT_SECRET_POST` " +
-                "for the Microsoft token endpoint " +
-                "(configuredClientAuthMethod=$configuredClientAuthMethod)."
+            unsupportedClientAuthMethodMessage(configuredClientAuthMethod)
         }
     }
+
+    internal fun requireSupportedClientAuthMethodForBroker() {
+        val configuredClientAuthMethod = clientAuthMethod
+
+        if (configuredClientAuthMethod != CLIENT_SECRET_POST) {
+            throw IdentityBrokerException(
+                unsupportedClientAuthMethodMessage(configuredClientAuthMethod)
+            )
+        }
+    }
+
+    private fun unsupportedClientAuthMethodMessage(configuredClientAuthMethod: String?): String =
+        "Minecraft identity provider supports only `$CLIENT_SECRET_POST` " +
+            "for the Microsoft token endpoint " +
+            "(configuredClientAuthMethod=$configuredClientAuthMethod)."
 
     companion object {
         internal const val CLIENT_SECRET_POST = "client_secret_post"

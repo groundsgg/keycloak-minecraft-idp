@@ -1,12 +1,12 @@
 # Keycloak Minecraft Identity Provider (keycloak-minecraft-idp)
 
-A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and uses the Minecraft Java player name when available, otherwise the Xbox Gamertag, as the primary username.
+A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xbox OAuth2 and resolves the brokered login identity to the Minecraft Java player name when a Java profile exists, otherwise to the Xbox Gamertag for supported Bedrock logins.
 
 ## Features
 
 - **Minecraft Java Edition Support** – Authenticate players with their Minecraft Java Edition account
-- **Bedrock Edition Fallback** – Players without Java Edition can use their Xbox Gamertag
-- **Automatic Username Sync** – Keycloak username is automatically set to the Minecraft player name
+- **Bedrock Edition Support** – Players with Bedrock entitlement can log in with their Xbox Gamertag
+- **Resolved Login Name** – Uses the Minecraft Java player name when available, otherwise the Xbox Gamertag
 - **Rich User Attributes** – Stores Minecraft UUID, edition type, and Xbox Gamertag
 - **Seamless Integration** – Works like any other Keycloak Identity Provider
 
@@ -47,10 +47,14 @@ sequenceDiagram
     participant Microsoft as Microsoft OAuth
     participant Xbox as Xbox Live
     participant MC as Minecraft API
+    participant UserStore as Keycloak User
 
     User->>Keycloak: Click "Sign in with Minecraft"
     Keycloak->>Microsoft: Redirect to OAuth
-    Microsoft-->>Keycloak: Access Token
+    Microsoft-->>Keycloak: Access Token + ID Token
+    opt syncRealName enabled
+        Keycloak->>Keycloak: Extract email / given_name / family_name claims
+    end
     Keycloak->>Xbox: Authenticate with Xbox Live
     Xbox-->>Keycloak: Xbox Token + Gamertag
     Keycloak->>Xbox: Get XSTS Token
@@ -61,10 +65,24 @@ sequenceDiagram
     MC-->>Keycloak: Owned products
     alt Owns Java Edition
         Keycloak->>MC: Get Profile
-        MC-->>Keycloak: Username + UUID
-        Keycloak-->>User: Logged in as Java Edition player
-    else Bedrock / no Java Edition
+        alt Java profile exists
+            MC-->>Keycloak: Username + UUID
+            Keycloak->>UserStore: Import or update brokered user
+            Keycloak->>UserStore: Refresh managed Minecraft/Xbox attributes
+            Keycloak-->>User: Logged in as Java Edition player
+        else Java profile missing and Bedrock owned
+            Keycloak->>UserStore: Import or update brokered user
+            Keycloak->>UserStore: Refresh managed Minecraft/Xbox attributes
+            Keycloak-->>User: Logged in as Xbox Gamertag (Bedrock login)
+        else Java profile missing and no Bedrock
+            Keycloak-->>User: Login failed, launcher profile setup required
+        end
+    else Owns Bedrock Edition only
+        Keycloak->>UserStore: Import or update brokered user
+        Keycloak->>UserStore: Refresh managed Minecraft/Xbox attributes
         Keycloak-->>User: Logged in as Xbox Gamertag (Bedrock)
+    else No Java or Bedrock entitlement
+        Keycloak-->>User: Login failed, no supported entitlement
     end
 ```
 
@@ -85,6 +103,17 @@ You need a Microsoft Azure App Registration:
    - **Redirect URI**: `https://your-keycloak-url/realms/{realm}/broker/minecraft/endpoint`
    - **API Permissions**: Add `XboxLive.signin` (delegated)
 4. Create a Client Secret under "Certificates & secrets"
+
+### Minecraft API Whitelisting
+
+Minecraft authentication integrations may also require Mojang/Minecraft API whitelisting, depending
+on how your application is registered and used. Check the official Minecraft help article before
+deployment:
+
+- https://help.minecraft.net/hc/en-us/articles/16254801392141
+
+If your application has not been whitelisted for the relevant Minecraft services APIs, authentication
+or entitlement checks may fail even when the Microsoft OAuth setup is otherwise correct.
 
 ## Configuration in Keycloak
 
@@ -109,19 +138,30 @@ Or with `kc.sh` flags:
 - `--spi-identity-provider-minecraft-client-id=<value>`
 - `--spi-identity-provider-minecraft-client-secret=<value>`
 
-When these server-level values are configured, the **Client ID** and **Client Secret** fields in the Keycloak admin UI may be left empty.
+When both server-level credentials are configured, the **Client ID** and **Client Secret** fields in the Keycloak admin UI may be left empty.
 
 If both are set, values entered in the Keycloak admin UI take precedence over the server-level defaults.
 
-The server-level secret is compatible with this provider's supported `client_secret_post` flow.
+The server-level secret is compatible with this provider's supported `client_secret_post` flow and may also be provided as a `vault:` reference.
+
+### Vault-Backed Client Secrets
+
+The configured **Client Secret** may also reference a Keycloak vault entry by using the `vault:` prefix.
+
+Example:
+
+```text
+vault:keycloak/minecraft
+```
+
+The provider resolves the secret through the Keycloak vault before sending the OAuth token request. Blank or unresolved vault values are rejected.
 
 ## User Attributes
 
-After successful authentication, the following attributes are stored:
+After successful authentication, the provider stores and refreshes the following managed custom attributes on the Keycloak user during brokered logins:
 
 | Attribute                  | Description                                                  |
 |----------------------------|--------------------------------------------------------------|
-| `username`                 | Primary Keycloak username: Java player name or Xbox Gamertag |
 | `minecraft_login_identity` | `java` or `bedrock` - which identity was used for login      |
 | `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected    |
 | `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected |
@@ -130,12 +170,20 @@ After successful authentication, the following attributes are stored:
 | `xbox_gamertag`            | The player's Xbox Gamertag                                   |
 | `xbox_user_id`             | The Xbox User ID (if available)                              |
 
+The brokered identity itself uses the resolved Minecraft Java username or Xbox Gamertag as its `username`. On initial user import, that becomes the Keycloak username. Existing users always get the managed custom attributes above refreshed on login; the current implementation does not force-update the core Keycloak `username` field on every subsequent login.
+
 ### Java Edition vs. Bedrock Edition
 
 - **Java Edition**: Players with Java entitlement and a Java profile get their Java player name and UUID
 - **Bedrock Edition**: Players with Bedrock entitlement can log in with their Xbox Gamertag
 
-If a player owns both editions, the plugin prefers `java` as the login identity when a Java profile exists. If Java is owned but no Java profile exists yet, the plugin falls back to `bedrock` only when a Bedrock entitlement is also present.
+The provider resolves login identity with these rules:
+
+- If the account owns Java Edition and a Java profile exists, login uses the Java username and UUID.
+- If the account owns Bedrock Edition but not Java Edition, login uses the Xbox Gamertag.
+- If the account owns Java Edition but no Java profile exists yet, login uses the Xbox Gamertag only when Bedrock entitlement is also present.
+- If the account owns Java Edition without a Java profile and does not own Bedrock, login fails and the user must create the Java profile through the Minecraft Launcher first.
+- If the account owns neither Java nor Bedrock, login fails.
 
 The ownership flags and the login identity are intentionally separate:
 
@@ -166,9 +214,11 @@ Keycloak will be available at http://localhost:8080.
 
 ## Troubleshooting
 
-### "This Microsoft account does not own Minecraft Java Edition"
+### "This Microsoft account does not own Minecraft"
 
-If the user does not own Java Edition but does own Bedrock Edition, they will be authenticated with their Xbox Gamertag instead.
+If the user does not own Java Edition but does own Bedrock Edition, they will still be authenticated with their Xbox Gamertag.
+
+If the account owns Java Edition but has not created a Java profile yet, the provider uses the Xbox Gamertag only when Bedrock entitlement is also present.
 
 If the account owns neither Java nor Bedrock, authentication fails.
 
@@ -181,16 +231,6 @@ If the account owns neither Java nor Bedrock, authentication fails.
 | 2148916235   | Xbox Live is not available in the user's country |
 | 2148916236/7 | Adult verification required (South Korea)        |
 | 2148916238   | Child account - needs to be added to a family    |
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## Acknowledgments
 

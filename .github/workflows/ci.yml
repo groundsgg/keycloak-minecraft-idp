@@ -38,13 +38,9 @@ jobs:
         run: ./gradlew spotlessCheck
 
       - name: Build
-        run: ./gradlew shadowJar
+        run: ./gradlew build --exclude-task test
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: keycloak-minecraft-idp
-          path: build/libs/keycloak-minecraft-idp.jar
-          retention-days: 30
+      - name: Test
+        run: ./gradlew test

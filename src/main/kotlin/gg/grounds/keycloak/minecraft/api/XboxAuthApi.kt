@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
+import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpRequest
@@ -34,6 +35,10 @@ class XboxAuthApi : XboxAuthClient {
                         "SiteName" to "user.auth.xboxlive.com",
                         "RpsTicket" to "d=$microsoftAccessToken",
                     ),
+                // Microsoft Learn's Xbox user-auth example uses this exact relying-party value:
+                // https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/live-website-authentication
+                // The `http://` scheme is part of the protocol identifier, not a transport URL to
+                // upgrade.
                 "RelyingParty" to "http://auth.xboxlive.com",
                 "TokenType" to "JWT",
             )
@@ -51,7 +56,8 @@ class XboxAuthApi : XboxAuthClient {
                 )
                 .build()
 
-        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
             throw IOException("Xbox authentication failed with status: ${response.statusCode()}")
@@ -86,7 +92,8 @@ class XboxAuthApi : XboxAuthClient {
                 )
                 .build()
 
-        val response = sharedHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
             if (response.statusCode() == 401) {
@@ -151,35 +158,6 @@ class XboxAuthApi : XboxAuthClient {
         @param:JsonProperty("Message") val message: String?,
         @param:JsonProperty("Redirect") val redirect: String?,
     )
-
-    /**
-     * Exception for known Xbox Live authentication error codes. Includes redirect URL in the
-     * message where provided (e.g., child-account setup links).
-     */
-    class XboxAuthException(
-        val errorCode: Long,
-        val rawMessage: String?,
-        val redirectUrl: String?,
-    ) : IOException(buildMessage(errorCode, redirectUrl)) {
-
-        companion object {
-            fun buildMessage(errorCode: Long, redirectUrl: String?): String {
-                val base =
-                    when (errorCode) {
-                        2148916227L -> "This account has been banned from Xbox Live."
-                        2148916233L ->
-                            "This Microsoft account has no Xbox account. " +
-                                "Please create one at xbox.com/live"
-                        2148916235L -> "Xbox Live is not available in your country."
-                        2148916236L,
-                        2148916237L -> "This account requires adult verification (South Korea)."
-                        2148916238L -> "This is a child account and needs to be added to a family."
-                        else -> "Xbox Live authentication failed (Error: $errorCode)"
-                    }
-                return if (!redirectUrl.isNullOrBlank()) "$base ($redirectUrl)" else base
-            }
-        }
-    }
 
     companion object {
         private const val XBOX_USER_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
