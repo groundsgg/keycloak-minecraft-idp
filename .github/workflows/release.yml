@@ -1,16 +1,17 @@
-name: Release
+name: Publish Release Packages
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,30 +37,17 @@ jobs:
             echo "github.token=${{ secrets.GITHUB_TOKEN }}"
           } > ~/.gradle/gradle.properties
 
-      - name: Resolve version
-        id: version
+      - name: Publish package
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-          else
-            version="$(./gradlew -q properties | awk -F': ' '/^version: /{print $2; exit}')"
-            echo "VERSION=$version" >> "$GITHUB_OUTPUT"
+          if [[ ! "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            echo "Expected a v* tag ref but received ${GITHUB_REF:-<empty>}"
+            exit 1
           fi
 
-      - name: Publish package and build release artifact
-        run: ./gradlew publish -PversionOverride="${{ steps.version.outputs.VERSION }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name="${GITHUB_REF#refs/tags/}"
+          version_override="${tag_name#v}"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          files: |
-            build/libs/keycloak-minecraft-idp.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ./gradlew publish -PversionOverride="$version_override"
