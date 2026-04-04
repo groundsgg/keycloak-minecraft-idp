@@ -1,0 +1,7 @@
+{
+  "release-type": "go",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {}
+  }
+}

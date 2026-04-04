@@ -32,3 +32,6 @@ docker/keycloak-data/
 
 # Codex
 .codex
+
+# Kotlin
+.kotlin
