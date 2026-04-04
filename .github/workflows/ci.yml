@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Configure GitHub Packages credentials
+        run: |
+          mkdir -p ~/.gradle
+          {
+            echo "github.user=${{ github.actor }}"
+            echo "github.token=${{ secrets.GITHUB_TOKEN }}"
+          } > ~/.gradle/gradle.properties
+
+      - name: Spotless
+        run: ./gradlew spotlessCheck
+
+      - name: Build
+        run: ./gradlew build --exclude-task test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test
+        run: ./gradlew test

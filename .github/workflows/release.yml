@@ -7,31 +7,49 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
+          fetch-depth: 0
 
-      - name: Extract version from tag
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Configure GitHub Packages credentials
+        run: |
+          mkdir -p ~/.gradle
+          {
+            echo "github.user=${{ github.actor }}"
+            echo "github.token=${{ secrets.GITHUB_TOKEN }}"
+          } > ~/.gradle/gradle.properties
+
+      - name: Resolve version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            version="$(./gradlew -q properties | awk -F': ' '/^version: /{print $2; exit}')"
+            echo "VERSION=$version" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Set version in pom.xml
-        run: mvn versions:set -DnewVersion=${{ steps.version.outputs.VERSION }} -DgenerateBackupPoms=false
-
-      - name: Build with Maven
-        run: mvn -B clean package --file pom.xml
+      - name: Publish package and build release artifact
+        run: ./gradlew publish -PversionOverride="${{ steps.version.outputs.VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -40,8 +58,8 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
+          tag_name: v${{ steps.version.outputs.VERSION }}
           files: |
-            target/keycloak-minecraft.jar
+            build/libs/keycloak-minecraft-idp.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

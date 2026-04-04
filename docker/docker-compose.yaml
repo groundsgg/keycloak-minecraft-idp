@@ -1,8 +1,6 @@
 services:
   keycloak:
-    build:
-      context: ./
-      dockerfile: Dockerfile
+    image: quay.io/keycloak/keycloak:26.5.6
     environment:
       # Admin credentials
       KEYCLOAK_ADMIN: admin
@@ -11,17 +9,18 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
+      KC_LOG_LEVEL: DEBUG
       # Database (using embedded H2 for development)
       KC_DB: dev-file
     volumes:
-      # Mount the built JAR for hot-reload during development
-      - ../target/keycloak-minecraft.jar:/opt/keycloak/providers/keycloak-minecraft.jar
+      # Mount the locally built provider JAR into Keycloak
+      - ../build/libs/keycloak-minecraft-idp.jar:/opt/keycloak/providers/keycloak-minecraft-idp.jar:ro
       # Persist H2 database
       - keycloak-data:/opt/keycloak/data
     ports:
       - "8080:8080"
-    command: start-dev
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/opt/keycloak/bin/kc.sh build && exec /opt/keycloak/bin/kc.sh start-dev"]
 
 volumes:
   keycloak-data:
-
