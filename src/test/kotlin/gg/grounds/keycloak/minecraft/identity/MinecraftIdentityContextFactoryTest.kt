@@ -22,7 +22,7 @@ class MinecraftIdentityContextFactoryTest {
         val context =
             factory.create(
                 ResolvedMinecraftIdentity(
-                    brokerUserId = "xbox-281467",
+                    brokerUserId = "xboxuhs-xsts-uhs",
                     username = "GroundsSteve",
                     loginIdentity = "java",
                     ownership =
@@ -34,12 +34,11 @@ class MinecraftIdentityContextFactoryTest {
                     minecraftJavaUuid = "12345678-9012-3456-7890-123456789012",
                     minecraftJavaUsername = "GroundsSteve",
                     xboxGamertag = "GroundsTag",
-                    xboxUserId = "281467",
                 )
             )
 
-        assertEquals("xbox-281467", context.id)
-        assertEquals("xbox-281467", context.brokerUserId)
+        assertEquals("xboxuhs-xsts-uhs", context.id)
+        assertEquals("xboxuhs-xsts-uhs", context.brokerUserId)
         assertEquals("groundssteve", context.username)
         assertEquals("java", context.getUserAttribute("minecraft_login_identity"))
         assertEquals("true", context.getUserAttribute("minecraft_java_owned"))
@@ -50,7 +49,6 @@ class MinecraftIdentityContextFactoryTest {
         )
         assertEquals("GroundsSteve", context.getUserAttribute("minecraft_java_username"))
         assertEquals("GroundsTag", context.getUserAttribute("xbox_gamertag"))
-        assertEquals("281467", context.getUserAttribute("xbox_user_id"))
     }
 
     @Test
@@ -79,6 +77,5 @@ class MinecraftIdentityContextFactoryTest {
         assertEquals("BedrockTag", context.getUserAttribute("xbox_gamertag"))
         assertNull(context.getUserAttribute("minecraft_java_uuid"))
         assertNull(context.getUserAttribute("minecraft_java_username"))
-        assertNull(context.getUserAttribute("xbox_user_id"))
     }
 }

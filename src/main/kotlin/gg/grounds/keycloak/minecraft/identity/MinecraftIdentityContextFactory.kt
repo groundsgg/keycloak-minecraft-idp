@@ -33,8 +33,5 @@ class MinecraftIdentityContextFactory(private val config: MinecraftIdentityProvi
             identity.xboxGamertag?.let {
                 setUserAttribute(MinecraftBrokeredAttributes.XBOX_GAMERTAG, it)
             }
-            identity.xboxUserId?.let {
-                setUserAttribute(MinecraftBrokeredAttributes.XBOX_USER_ID, it)
-            }
         }
 }

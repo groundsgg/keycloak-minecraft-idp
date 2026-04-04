@@ -179,13 +179,12 @@ internal fun xboxResponse(
     token: String,
     userHash: String?,
     gamertag: String? = null,
-    xboxUserId: String? = null,
 ): XboxAuthApi.XboxAuthResponse =
     XboxAuthApi.XboxAuthResponse(
         token = token,
         displayClaims =
             XboxAuthApi.DisplayClaims(
-                xui = listOf(XboxAuthApi.XuiClaim(uhs = userHash, gtg = gamertag, xid = xboxUserId))
+                xui = listOf(XboxAuthApi.XuiClaim(uhs = userHash, gtg = gamertag))
             ),
     )
 

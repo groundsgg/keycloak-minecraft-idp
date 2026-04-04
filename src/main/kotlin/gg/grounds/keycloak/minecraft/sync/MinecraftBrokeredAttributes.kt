@@ -8,16 +8,7 @@ object MinecraftBrokeredAttributes {
     const val JAVA_UUID = "minecraft_java_uuid"
     const val JAVA_USERNAME = "minecraft_java_username"
     const val XBOX_GAMERTAG = "xbox_gamertag"
-    const val XBOX_USER_ID = "xbox_user_id"
 
     val managed =
-        setOf(
-            LOGIN_IDENTITY,
-            JAVA_OWNED,
-            BEDROCK_OWNED,
-            JAVA_UUID,
-            JAVA_USERNAME,
-            XBOX_GAMERTAG,
-            XBOX_USER_ID,
-        )
+        setOf(LOGIN_IDENTITY, JAVA_OWNED, BEDROCK_OWNED, JAVA_UUID, JAVA_USERNAME, XBOX_GAMERTAG)
 }

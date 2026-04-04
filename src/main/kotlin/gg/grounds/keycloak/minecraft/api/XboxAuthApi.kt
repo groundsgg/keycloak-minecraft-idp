@@ -131,9 +131,6 @@ class XboxAuthApi : XboxAuthClient {
 
         val gamertag: String?
             get() = displayClaims?.xui?.firstOrNull()?.gtg
-
-        val xboxUserId: String?
-            get() = displayClaims?.xui?.firstOrNull()?.xid
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -147,7 +144,6 @@ class XboxAuthApi : XboxAuthClient {
     constructor(
         @param:JsonProperty("uhs") val uhs: String?,
         @param:JsonProperty("gtg") val gtg: String?,
-        @param:JsonProperty("xid") val xid: String?,
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -29,7 +29,6 @@ class MinecraftIdentityResolverTest {
                         token = "xsts-token",
                         userHash = "xsts-uhs",
                         gamertag = "GroundsTag",
-                        xboxUserId = "281467",
                     )
                 },
             )
@@ -67,13 +66,12 @@ class MinecraftIdentityResolverTest {
         assertEquals(listOf("xsts-uhs" to "xsts-token"), minecraftClient.minecraftAuthRequests)
         assertEquals(listOf("minecraft-token"), minecraftClient.ownershipRequests)
         assertEquals(listOf("minecraft-token"), minecraftClient.profileRequests)
-        assertEquals("xbox-281467", identity.brokerUserId)
+        assertEquals("xboxuhs-xsts-uhs", identity.brokerUserId)
         assertEquals("GroundsSteve", identity.username)
         assertEquals("java", identity.loginIdentity)
         assertEquals("12345678-9012-3456-7890-123456789012", identity.minecraftJavaUuid)
         assertEquals("GroundsSteve", identity.minecraftJavaUsername)
         assertEquals("GroundsTag", identity.xboxGamertag)
-        assertEquals("281467", identity.xboxUserId)
     }
 
     @Test
@@ -88,7 +86,6 @@ class MinecraftIdentityResolverTest {
                         token = "xsts-token",
                         userHash = "xsts-uhs",
                         gamertag = "BedrockTag",
-                        xboxUserId = null,
                     )
                 },
             )
@@ -122,7 +119,6 @@ class MinecraftIdentityResolverTest {
         assertEquals(null, identity.minecraftJavaUuid)
         assertEquals(null, identity.minecraftJavaUsername)
         assertEquals("BedrockTag", identity.xboxGamertag)
-        assertEquals(null, identity.xboxUserId)
     }
 
     @Test

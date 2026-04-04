@@ -14,5 +14,4 @@ data class ResolvedMinecraftIdentity(
     val minecraftJavaUuid: String? = null,
     val minecraftJavaUsername: String? = null,
     val xboxGamertag: String? = null,
-    val xboxUserId: String? = null,
 )

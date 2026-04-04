@@ -391,7 +391,6 @@ class MinecraftIdentityProviderTest {
                         token = "xsts-token",
                         userHash = "xsts-uhs",
                         gamertag = "GroundsTag",
-                        xboxUserId = "281467",
                     )
                 },
             )

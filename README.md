@@ -7,14 +7,17 @@ A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xb
 - **Minecraft Java Edition Support** – Authenticate players with their Minecraft Java Edition account
 - **Bedrock Edition Support** – Players with Bedrock entitlement can log in with their Xbox Gamertag
 - **Resolved Login Name** – Uses the Minecraft Java player name when available, otherwise the Xbox Gamertag
-- **Rich User Attributes** – Stores Minecraft UUID, edition type, and Xbox Gamertag
+- **Rich User Attributes** – Stores Minecraft UUID, edition type, and best-effort Xbox Gamertag
 - **Seamless Integration** – Works like any other Keycloak Identity Provider
 
 ## Quick Start
 
 ### Download
 
-Download the latest JAR from the [Releases](https://github.com/groundsgg/keycloak-minecraft-idp/releases) page.
+Download the published package from GitHub Packages:
+
+- Repository: `https://maven.pkg.github.com/groundsgg/keycloak-minecraft-idp`
+- Artifact: `gg.grounds:keycloak-minecraft-idp:<version>`
 
 Or build from source:
 
@@ -167,8 +170,7 @@ After successful authentication, the provider stores and refreshes the following
 | `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected |
 | `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)            |
 | `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)   |
-| `xbox_gamertag`            | The player's Xbox Gamertag                                   |
-| `xbox_user_id`             | The Xbox User ID (if available)                              |
+| `xbox_gamertag`            | The player's Xbox Gamertag (best effort, when available)     |
 
 The brokered identity itself uses the resolved Minecraft Java username or Xbox Gamertag as its `username`. On initial user import, that becomes the Keycloak username. Existing users always get the managed custom attributes above refreshed on login; the current implementation does not force-update the core Keycloak `username` field on every subsequent login.
 

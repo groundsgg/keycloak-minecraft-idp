@@ -62,11 +62,10 @@ class MinecraftIdentityResolver(
                 }
 
             val xboxGamertag = xstsResponse.gamertag
-            val xboxUserId = xstsResponse.xboxUserId
             val userHash =
                 xstsResponse.userHash
                     ?: throw IdentityBrokerException("XSTS response did not return a user hash")
-            val stableBrokerUserId = resolveStableBrokerUserId(xboxUserId, userHash)
+            val stableBrokerUserId = resolveStableBrokerUserId(userHash)
 
             val minecraftToken =
                 minecraftClient.authenticateWithMinecraft(userHash, xstsResponse.token).accessToken
@@ -86,7 +85,6 @@ class MinecraftIdentityResolver(
                         minecraftJavaUuid = profile.formattedUuid,
                         minecraftJavaUsername = profile.name,
                         xboxGamertag = xboxGamertag,
-                        xboxUserId = xboxUserId,
                     )
                 } catch (e: MinecraftProfileNotFoundException) {
                     if (ownership.ownsBedrockEdition) {
@@ -95,12 +93,7 @@ class MinecraftIdentityResolver(
                             "Resolved Minecraft Java profile missing; falling back to Bedrock identity (provider=%s)",
                             MinecraftIdentityProvider.PROVIDER_ID,
                         )
-                        resolveBedrockIdentity(
-                            stableBrokerUserId,
-                            xboxGamertag,
-                            xboxUserId,
-                            ownership,
-                        )
+                        resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
                     } else {
                         logger.warnf(
                             e,
@@ -117,12 +110,7 @@ class MinecraftIdentityResolver(
             }
 
             if (ownership.ownsBedrockEdition) {
-                return resolveBedrockIdentity(
-                    stableBrokerUserId,
-                    xboxGamertag,
-                    xboxUserId,
-                    ownership,
-                )
+                return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
             }
 
             throw IdentityBrokerException(
@@ -174,7 +162,6 @@ class MinecraftIdentityResolver(
     private fun resolveBedrockIdentity(
         brokerUserId: String,
         xboxGamertag: String?,
-        xboxUserId: String?,
         ownership: MinecraftApi.Ownership,
     ): ResolvedMinecraftIdentity {
         if (xboxGamertag.isNullOrBlank()) {
@@ -191,16 +178,14 @@ class MinecraftIdentityResolver(
             loginIdentity = "bedrock",
             ownership = ownership,
             xboxGamertag = xboxGamertag,
-            xboxUserId = xboxUserId,
         )
     }
 
     /**
-     * Prefers the stable Xbox user id when available and falls back to the XSTS user hash
-     * otherwise, so the brokered user id remains consistent across Java and Bedrock flows.
+     * Uses the XSTS user hash as the brokered user id because the Minecraft XSTS flow does not
+     * guarantee a stable Xbox user identifier such as xid or ptx.
      */
-    private fun resolveStableBrokerUserId(xboxUserId: String?, userHash: String): String =
-        xboxUserId?.let { "xbox-$it" } ?: "xboxuhs-$userHash"
+    private fun resolveStableBrokerUserId(userHash: String): String = "xboxuhs-$userHash"
 
     companion object {
         private val logger = Logger.getLogger(MinecraftIdentityResolver::class.java)

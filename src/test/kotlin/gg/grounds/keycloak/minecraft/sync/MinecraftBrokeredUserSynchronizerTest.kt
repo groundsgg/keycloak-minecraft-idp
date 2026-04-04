@@ -95,7 +95,6 @@ class MinecraftBrokeredUserSynchronizerTest {
             setUserAttribute("minecraft_java_uuid", "12345678-9012-3456-7890-123456789012")
             setUserAttribute("minecraft_java_username", "GroundsSteve")
             setUserAttribute("xbox_gamertag", "GroundsTag")
-            setUserAttribute("xbox_user_id", "281467")
         }
 
         synchronizer.sync(recordingUserModel(state), context)
@@ -109,7 +108,6 @@ class MinecraftBrokeredUserSynchronizerTest {
         )
         assertEquals(listOf("GroundsSteve"), state.attributes["minecraft_java_username"]?.toList())
         assertEquals(listOf("GroundsTag"), state.attributes["xbox_gamertag"]?.toList())
-        assertEquals(listOf("281467"), state.attributes["xbox_user_id"]?.toList())
     }
 
     @Test
@@ -130,7 +128,6 @@ class MinecraftBrokeredUserSynchronizerTest {
                             mutableListOf("12345678-9012-3456-7890-123456789012"),
                         "minecraft_java_username" to mutableListOf("GroundsSteve"),
                         "xbox_gamertag" to mutableListOf("GroundsTag"),
-                        "xbox_user_id" to mutableListOf("281467"),
                         "custom_attribute" to mutableListOf("preserved"),
                     ),
             )
@@ -150,7 +147,6 @@ class MinecraftBrokeredUserSynchronizerTest {
         assertEquals(listOf("BedrockTag"), state.attributes["xbox_gamertag"]?.toList())
         assertEquals(null, state.attributes["minecraft_java_uuid"])
         assertEquals(null, state.attributes["minecraft_java_username"])
-        assertEquals(null, state.attributes["xbox_user_id"])
         assertEquals(listOf("preserved"), state.attributes["custom_attribute"]?.toList())
     }
 

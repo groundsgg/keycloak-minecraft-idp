@@ -30,25 +30,17 @@ class XboxAuthApiModelTest {
     }
 
     @Test
-    fun `response exposes user hash gamertag and xbox user id`() {
+    fun `response exposes user hash and gamertag`() {
         val response =
             XboxAuthApi.XboxAuthResponse(
                 token = "xsts-token",
                 displayClaims =
                     XboxAuthApi.DisplayClaims(
-                        xui =
-                            listOf(
-                                XboxAuthApi.XuiClaim(
-                                    uhs = "xsts-uhs",
-                                    gtg = "GroundsTag",
-                                    xid = "281467",
-                                )
-                            )
+                        xui = listOf(XboxAuthApi.XuiClaim(uhs = "xsts-uhs", gtg = "GroundsTag"))
                     ),
             )
 
         assertEquals("xsts-uhs", response.userHash)
         assertEquals("GroundsTag", response.gamertag)
-        assertEquals("281467", response.xboxUserId)
     }
 }
