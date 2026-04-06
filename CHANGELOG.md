@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.0.0...v1.0.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* attach jar to release ([#10](https://github.com/groundsgg/keycloak-minecraft-idp/issues/10)) ([db29e0a](https://github.com/groundsgg/keycloak-minecraft-idp/commit/db29e0ac2af9d9db688b7994110c81aaf1564865))
+
 ## [1.0.0](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v0.1.0...v1.0.0) (2026-04-06)
 
 
