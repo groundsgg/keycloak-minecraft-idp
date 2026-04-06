@@ -26,6 +26,8 @@ dependencies {
     compileOnly("org.keycloak:keycloak-services")
     compileOnly("com.fasterxml.jackson.core:jackson-databind")
     compileOnly("org.jboss.logging:jboss-logging")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.83")
+    implementation("com.nimbusds:nimbus-jose-jwt:10.9")
     testImplementation(platform("org.keycloak:keycloak-parent:$keycloakVersion"))
     testImplementation("org.keycloak:keycloak-server-spi")
     testImplementation("org.keycloak:keycloak-server-spi-private")

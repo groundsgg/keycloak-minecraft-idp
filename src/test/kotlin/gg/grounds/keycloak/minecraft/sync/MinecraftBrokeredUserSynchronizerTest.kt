@@ -23,14 +23,14 @@ class MinecraftBrokeredUserSynchronizerTest {
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
             authenticationSession = authenticationSession(isNewUser = true)
-            firstName = "Lukas"
-            lastName = "Jost"
+            firstName = "Avery"
+            lastName = "Stone"
         }
 
         synchronizer.sync(recordingUserModel(state), context)
 
-        assertEquals("Lukas", state.firstName)
-        assertEquals("Jost", state.lastName)
+        assertEquals("Avery", state.firstName)
+        assertEquals("Stone", state.lastName)
     }
 
     @Test
@@ -42,8 +42,8 @@ class MinecraftBrokeredUserSynchronizerTest {
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
             authenticationSession = authenticationSession(isNewUser = true)
-            firstName = "Lukas"
-            lastName = "Jost"
+            firstName = "Avery"
+            lastName = "Stone"
         }
 
         synchronizer.sync(recordingUserModel(state), context)
@@ -53,7 +53,7 @@ class MinecraftBrokeredUserSynchronizerTest {
     }
 
     @Test
-    fun `keeps existing names when sync mode is not force`() {
+    fun `keeps existing names when sync mode is import`() {
         val synchronizer =
             MinecraftBrokeredUserSynchronizer(
                 MinecraftIdentityProviderConfig().apply {
@@ -70,8 +70,8 @@ class MinecraftBrokeredUserSynchronizerTest {
             )
         val context = brokeredContext {
             authenticationSession = authenticationSession(isNewUser = false)
-            firstName = "Lukas"
-            lastName = "Jost"
+            firstName = "Avery"
+            lastName = "Stone"
         }
 
         synchronizer.sync(recordingUserModel(state), context)
@@ -81,25 +81,57 @@ class MinecraftBrokeredUserSynchronizerTest {
     }
 
     @Test
+    fun `refreshes existing names when sync mode is force`() {
+        val synchronizer =
+            MinecraftBrokeredUserSynchronizer(
+                MinecraftIdentityProviderConfig().apply {
+                    isEnabled = true
+                    syncRealName = true
+                    syncMode = IdentityProviderSyncMode.FORCE
+                }
+            )
+        val state =
+            RecordingUserState(
+                username = "minecraft-user",
+                firstName = "Existing",
+                lastName = "Player",
+            )
+        val context = brokeredContext {
+            authenticationSession = authenticationSession(isNewUser = false)
+            firstName = "Avery"
+            lastName = "Stone"
+        }
+
+        synchronizer.sync(recordingUserModel(state), context)
+
+        assertEquals("Avery", state.firstName)
+        assertEquals("Stone", state.lastName)
+    }
+
+    @Test
     fun `syncs managed Minecraft attributes for existing users`() {
         val synchronizer =
             MinecraftBrokeredUserSynchronizer(
-                MinecraftIdentityProviderConfig().apply { isEnabled = true }
+                MinecraftIdentityProviderConfig().apply {
+                    isEnabled = true
+                    syncRealName = true
+                }
             )
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
             authenticationSession = authenticationSession(isNewUser = false)
+            setUserAttribute("microsoft_name", "Avery Stone")
             setUserAttribute("minecraft_login_identity", "java")
             setUserAttribute("minecraft_java_owned", "true")
             setUserAttribute("minecraft_bedrock_owned", "false")
             setUserAttribute("minecraft_java_uuid", "12345678-9012-3456-7890-123456789012")
             setUserAttribute("minecraft_java_username", "GroundsSteve")
             setUserAttribute("xbox_gamertag", "GroundsTag")
-            setUserAttribute("xbox_user_id", "281467")
         }
 
         synchronizer.sync(recordingUserModel(state), context)
 
+        assertEquals(listOf("Avery Stone"), state.attributes["microsoft_name"]?.toList())
         assertEquals(listOf("java"), state.attributes["minecraft_login_identity"]?.toList())
         assertEquals(listOf("true"), state.attributes["minecraft_java_owned"]?.toList())
         assertEquals(listOf("false"), state.attributes["minecraft_bedrock_owned"]?.toList())
@@ -109,20 +141,23 @@ class MinecraftBrokeredUserSynchronizerTest {
         )
         assertEquals(listOf("GroundsSteve"), state.attributes["minecraft_java_username"]?.toList())
         assertEquals(listOf("GroundsTag"), state.attributes["xbox_gamertag"]?.toList())
-        assertEquals(listOf("281467"), state.attributes["xbox_user_id"]?.toList())
     }
 
     @Test
     fun `removes stale managed Minecraft attributes when context omits them`() {
         val synchronizer =
             MinecraftBrokeredUserSynchronizer(
-                MinecraftIdentityProviderConfig().apply { isEnabled = true }
+                MinecraftIdentityProviderConfig().apply {
+                    isEnabled = true
+                    syncRealName = true
+                }
             )
         val state =
             RecordingUserState(
                 username = "minecraft-user",
                 attributes =
                     mutableMapOf(
+                        "microsoft_name" to mutableListOf("Old Name"),
                         "minecraft_login_identity" to mutableListOf("java"),
                         "minecraft_java_owned" to mutableListOf("true"),
                         "minecraft_bedrock_owned" to mutableListOf("true"),
@@ -130,7 +165,6 @@ class MinecraftBrokeredUserSynchronizerTest {
                             mutableListOf("12345678-9012-3456-7890-123456789012"),
                         "minecraft_java_username" to mutableListOf("GroundsSteve"),
                         "xbox_gamertag" to mutableListOf("GroundsTag"),
-                        "xbox_user_id" to mutableListOf("281467"),
                         "custom_attribute" to mutableListOf("preserved"),
                     ),
             )
@@ -144,14 +178,40 @@ class MinecraftBrokeredUserSynchronizerTest {
 
         synchronizer.sync(recordingUserModel(state), context)
 
+        assertEquals(null, state.attributes["microsoft_name"])
         assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
         assertEquals(listOf("false"), state.attributes["minecraft_java_owned"]?.toList())
         assertEquals(listOf("true"), state.attributes["minecraft_bedrock_owned"]?.toList())
         assertEquals(listOf("BedrockTag"), state.attributes["xbox_gamertag"]?.toList())
         assertEquals(null, state.attributes["minecraft_java_uuid"])
         assertEquals(null, state.attributes["minecraft_java_username"])
-        assertEquals(null, state.attributes["xbox_user_id"])
         assertEquals(listOf("preserved"), state.attributes["custom_attribute"]?.toList())
+    }
+
+    @Test
+    fun `preserves microsoft name when real name sync is disabled`() {
+        val synchronizer =
+            MinecraftBrokeredUserSynchronizer(
+                MinecraftIdentityProviderConfig().apply { isEnabled = true }
+            )
+        val state =
+            RecordingUserState(
+                username = "minecraft-user",
+                attributes =
+                    mutableMapOf(
+                        "microsoft_name" to mutableListOf("Old Name"),
+                        "minecraft_login_identity" to mutableListOf("java"),
+                    ),
+            )
+        val context = brokeredContext {
+            authenticationSession = authenticationSession(isNewUser = false)
+            setUserAttribute("minecraft_login_identity", "bedrock")
+        }
+
+        synchronizer.sync(recordingUserModel(state), context)
+
+        assertEquals(listOf("Old Name"), state.attributes["microsoft_name"]?.toList())
+        assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
     }
 
     private fun brokeredContext(

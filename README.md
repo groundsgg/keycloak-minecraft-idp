@@ -7,14 +7,18 @@ A Keycloak Identity Provider plugin that enables authentication via Microsoft/Xb
 - **Minecraft Java Edition Support** – Authenticate players with their Minecraft Java Edition account
 - **Bedrock Edition Support** – Players with Bedrock entitlement can log in with their Xbox Gamertag
 - **Resolved Login Name** – Uses the Minecraft Java player name when available, otherwise the Xbox Gamertag
-- **Rich User Attributes** – Stores Minecraft UUID, edition type, and Xbox Gamertag
+- **Stable Account Linking** – Uses the Xbox partner `ptx` claim for brokered account linking
+- **Rich User Attributes** – Stores Minecraft UUID, edition type, and best-effort Xbox Gamertag
 - **Seamless Integration** – Works like any other Keycloak Identity Provider
 
 ## Quick Start
 
 ### Download
 
-Download the latest JAR from the [Releases](https://github.com/groundsgg/keycloak-minecraft-idp/releases) page.
+Download the published package from GitHub Packages:
+
+- Repository: `https://maven.pkg.github.com/groundsgg/keycloak-minecraft-idp`
+- Artifact: `gg.grounds:keycloak-minecraft-idp:<version>`
 
 Or build from source:
 
@@ -57,8 +61,10 @@ sequenceDiagram
     end
     Keycloak->>Xbox: Authenticate with Xbox Live
     Xbox-->>Keycloak: Xbox Token + Gamertag
-    Keycloak->>Xbox: Get XSTS Token
-    Xbox-->>Keycloak: XSTS Token
+    Keycloak->>Xbox: Get Minecraft XSTS Token
+    Xbox-->>Keycloak: Minecraft XSTS Token
+    Keycloak->>Xbox: Get Partner XSTS Token
+    Xbox-->>Keycloak: Partner XSTS Token (+ ptx when available)
     Keycloak->>MC: Authenticate with Minecraft
     MC-->>Keycloak: Minecraft Token
     Keycloak->>MC: Check entitlements (/entitlements/license)
@@ -122,9 +128,31 @@ or entitlement checks may fail even when the Microsoft OAuth setup is otherwise 
 3. Configure:
    - **Client ID**: The Application (client) ID from your Azure App
    - **Client Secret**: The Client Secret from your Azure App
+   - **Partner Relying Party**: The Xbox partner relying party that returns the `ptx` claim
+   - **Partner XSTS Private Key**: Optional PEM, `file:`, or `vault:` reference used when the
+     partner token is encrypted and `ptx` is not exposed in `DisplayClaims`
 
 This provider supports only the OAuth client authentication method `client_secret_post`.
 Do not enable Basic or JWT-based client authentication modes for this identity provider.
+
+### Required Xbox Partner Setup
+
+Stable brokered account linking uses the Xbox partner `ptx` claim. The provider requests a second
+partner XSTS token in addition to the Minecraft XSTS token, so your Microsoft/Xbox setup must
+include a partner relying party that returns `ptx`.
+
+Without that partner relying party, login fails.
+
+Some partner relying parties return `ptx` only inside the encrypted XSTS token payload instead of
+`DisplayClaims`. In that case, configure **Partner XSTS Private Key** with the matching private
+key so the provider can decrypt the partner token and recover `ptx`.
+
+Example values:
+
+- Raw PEM content
+- `file:/opt/keycloak/conf/xsts-private.pem`
+- `/opt/keycloak/conf/xsts-private.pem`
+- `vault:keycloak/minecraft-partner-xsts-private-key`
 
 ### Optional Server-Level Credentials
 
@@ -132,11 +160,13 @@ Instead of storing the Microsoft client credentials in the realm database, you c
 
 - `KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID`
 - `KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_SECRET`
+- `KC_SPI_IDENTITY_PROVIDER_MINECRAFT_PARTNER_XSTS_PRIVATE_KEY`
 
 Or with `kc.sh` flags:
 
 - `--spi-identity-provider-minecraft-client-id=<value>`
 - `--spi-identity-provider-minecraft-client-secret=<value>`
+- `--spi-identity-provider-minecraft-partner-xsts-private-key=<value>`
 
 When both server-level credentials are configured, the **Client ID** and **Client Secret** fields in the Keycloak admin UI may be left empty.
 
@@ -144,9 +174,10 @@ If both are set, values entered in the Keycloak admin UI take precedence over th
 
 The server-level secret is compatible with this provider's supported `client_secret_post` flow and may also be provided as a `vault:` reference.
 
-### Vault-Backed Client Secrets
+### Vault-Backed Secrets
 
-The configured **Client Secret** may also reference a Keycloak vault entry by using the `vault:` prefix.
+The configured **Client Secret** and **Partner XSTS Private Key** may reference a Keycloak vault
+entry by using the `vault:` prefix.
 
 Example:
 
@@ -154,7 +185,8 @@ Example:
 vault:keycloak/minecraft
 ```
 
-The provider resolves the secret through the Keycloak vault before sending the OAuth token request. Blank or unresolved vault values are rejected.
+The provider resolves the configured value through the Keycloak vault before using it. Blank or
+unresolved vault values are rejected.
 
 ## User Attributes
 
@@ -162,15 +194,33 @@ After successful authentication, the provider stores and refreshes the following
 
 | Attribute                  | Description                                                  |
 |----------------------------|--------------------------------------------------------------|
+| `microsoft_name`           | The raw Microsoft OIDC `name` claim when available           |
 | `minecraft_login_identity` | `java` or `bedrock` - which identity was used for login      |
 | `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected    |
 | `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected |
 | `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)            |
 | `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)   |
-| `xbox_gamertag`            | The player's Xbox Gamertag                                   |
-| `xbox_user_id`             | The Xbox User ID (if available)                              |
+| `xbox_gamertag`            | The player's Xbox Gamertag (best effort, when available)     |
 
-The brokered identity itself uses the resolved Minecraft Java username or Xbox Gamertag as its `username`. On initial user import, that becomes the Keycloak username. Existing users always get the managed custom attributes above refreshed on login; the current implementation does not force-update the core Keycloak `username` field on every subsequent login.
+The brokered identity itself uses the resolved Minecraft Java username or Xbox Gamertag as its
+`username`. On initial user import, that becomes the Keycloak username. Existing users always get
+the managed custom attributes above refreshed on login. When **Sync Real Name** is enabled, the
+provider also refreshes the raw `microsoft_name` attribute and, when Microsoft provides
+`given_name` and `family_name`, synchronizes the core Keycloak `firstName` and `lastName` fields
+according to the identity provider sync mode. The current implementation does not force-update the
+core Keycloak `username` field on every subsequent login.
+
+Internally, brokered account linking uses the Xbox partner `ptx` claim from the configured partner
+XSTS token. Microsoft documents `ptx` (Partner XUID / pXUID) as the recommended identifier for
+account-linking and single sign-on scenarios because it is unique per publisher, while the XSTS
+user hash (`uhs`) is not guaranteed to remain stable across future tokens. The Minecraft XSTS
+token is still used only for Minecraft authentication.
+
+References:
+
+- https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/live-title-service-authentication
+- https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/security-tokens/live-security-tokens
+- https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/security-tokens/live-token-claims
 
 ### Java Edition vs. Bedrock Edition
 

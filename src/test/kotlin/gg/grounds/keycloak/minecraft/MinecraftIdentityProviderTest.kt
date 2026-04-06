@@ -203,6 +203,27 @@ class MinecraftIdentityProviderTest {
     }
 
     @Test
+    fun `authenticateTokenRequest rejects missing partner relying party`() {
+        val exception =
+            assertFailsWith<IdentityBrokerException> {
+                createProvider(
+                    config =
+                        MinecraftIdentityProviderConfig().apply {
+                            clientId = "realm-client-id"
+                            clientSecret = "realm-client-secret"
+                            partnerRelyingParty = null
+                        },
+                    applyDefaultPartnerRelyingParty = false,
+                )
+            }
+
+        assertEquals(
+            "Minecraft identity provider is missing `partnerRelyingParty`. Configure the partner relying party that returns the Xbox ptx claim.",
+            exception.message,
+        )
+    }
+
+    @Test
     fun `extractIdentityFromProfile maps id and username`() {
         val provider = createProvider()
         val profile = ObjectMapper().readTree("""{"id":"minecraft-id","name":"GroundsSteve"}""")
@@ -255,6 +276,7 @@ class MinecraftIdentityProviderTest {
 
         assertEquals("groundssteve", context.username)
         assertEquals("alex@example.com", context.email)
+        assertEquals(null, context.getUserAttribute("microsoft_name"))
         assertEquals("Alex", context.firstName)
         assertEquals("Player", context.lastName)
     }
@@ -274,6 +296,7 @@ class MinecraftIdentityProviderTest {
         val context = provider.getFederatedIdentity(response)
 
         assertEquals("alex@example.com", context.email)
+        assertEquals(null, context.getUserAttribute("microsoft_name"))
         assertNull(context.firstName)
         assertNull(context.lastName)
     }
@@ -285,14 +308,35 @@ class MinecraftIdentityProviderTest {
             """
             {
               "access_token":"ms-access-token",
-              "id_token":"${idToken(name = "Lukas Jost", email = "lukas@example.com")}"
+              "id_token":"${idToken(name = "Avery Stone", email = "avery@example.com")}"
             }
             """
                 .trimIndent()
 
         val context = provider.getFederatedIdentity(response)
 
-        assertEquals("lukas@example.com", context.email)
+        assertEquals("avery@example.com", context.email)
+        assertEquals("Avery Stone", context.getUserAttribute("microsoft_name"))
+        assertNull(context.firstName)
+        assertNull(context.lastName)
+    }
+
+    @Test
+    fun `does not sync microsoft name when real name sync is disabled`() {
+        val provider = createProvider()
+        val response =
+            """
+            {
+              "access_token":"ms-access-token",
+              "id_token":"${idToken(name = "Avery Stone", email = "avery@example.com")}"
+            }
+            """
+                .trimIndent()
+
+        val context = provider.getFederatedIdentity(response)
+
+        assertEquals("avery@example.com", context.email)
+        assertNull(context.getUserAttribute("microsoft_name"))
         assertNull(context.firstName)
         assertNull(context.lastName)
     }
@@ -315,8 +359,8 @@ class MinecraftIdentityProviderTest {
                 .BrokeredIdentityContext("minecraft-id", provider.config)
                 .apply {
                     authenticationSession = authenticationSession(isNewUser = true)
-                    firstName = "Lukas"
-                    lastName = "Jost"
+                    firstName = "Avery"
+                    lastName = "Stone"
                 }
 
         provider.updateBrokeredUser(
@@ -326,18 +370,19 @@ class MinecraftIdentityProviderTest {
             context,
         )
 
-        assertEquals("Lukas", state.firstName)
-        assertEquals("Jost", state.lastName)
+        assertEquals("Avery", state.firstName)
+        assertEquals("Stone", state.lastName)
     }
 
     @Test
     fun `updateBrokeredUser syncs managed attributes through provider hook`() {
-        val provider = createProvider()
+        val provider = createProvider(syncRealName = true)
         val state =
             RecordingUserState(
                 username = "minecraft-user",
                 attributes =
                     mutableMapOf(
+                        "microsoft_name" to mutableListOf("Old Name"),
                         "minecraft_login_identity" to mutableListOf("java"),
                         "minecraft_java_uuid" to
                             mutableListOf("12345678-9012-3456-7890-123456789012"),
@@ -349,6 +394,7 @@ class MinecraftIdentityProviderTest {
                 .BrokeredIdentityContext("minecraft-id", provider.config)
                 .apply {
                     authenticationSession = authenticationSession(isNewUser = false)
+                    setUserAttribute("microsoft_name", "Avery Stone")
                     setUserAttribute("minecraft_login_identity", "bedrock")
                     setUserAttribute("minecraft_java_owned", "false")
                     setUserAttribute("minecraft_bedrock_owned", "true")
@@ -362,6 +408,7 @@ class MinecraftIdentityProviderTest {
             context,
         )
 
+        assertEquals(listOf("Avery Stone"), state.attributes["microsoft_name"]?.toList())
         assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
         assertEquals(listOf("false"), state.attributes["minecraft_java_owned"]?.toList())
         assertEquals(listOf("true"), state.attributes["minecraft_bedrock_owned"]?.toList())
@@ -370,28 +417,71 @@ class MinecraftIdentityProviderTest {
         assertEquals(listOf("preserved"), state.attributes["custom_attribute"]?.toList())
     }
 
+    @Test
+    fun `updateBrokeredUser preserves microsoft name when real name sync is disabled`() {
+        val provider = createProvider(syncRealName = false)
+        val state =
+            RecordingUserState(
+                username = "minecraft-user",
+                attributes =
+                    mutableMapOf(
+                        "microsoft_name" to mutableListOf("Old Name"),
+                        "minecraft_login_identity" to mutableListOf("java"),
+                    ),
+            )
+        val context =
+            org.keycloak.broker.provider
+                .BrokeredIdentityContext("minecraft-id", provider.config)
+                .apply {
+                    authenticationSession = authenticationSession(isNewUser = false)
+                    setUserAttribute("minecraft_login_identity", "bedrock")
+                }
+
+        provider.updateBrokeredUser(
+            testKeycloakSession(),
+            realmModel(),
+            recordingUserModel(state),
+            context,
+        )
+
+        assertEquals(listOf("Old Name"), state.attributes["microsoft_name"]?.toList())
+        assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
+    }
+
     private fun createProvider(
         config: MinecraftIdentityProviderConfig =
             MinecraftIdentityProviderConfig().apply {
                 isEnabled = true
                 clientId = "minecraft-client-id"
                 clientSecret = "minecraft-client-secret"
+                partnerRelyingParty = "https://grounds.example.com"
             },
         session: org.keycloak.models.KeycloakSession = testKeycloakSession(),
         syncRealName: Boolean = config.syncRealName,
+        applyDefaultPartnerRelyingParty: Boolean = true,
     ): MinecraftIdentityProvider {
         config.syncRealName = syncRealName
+        if (applyDefaultPartnerRelyingParty && config.partnerRelyingParty == null) {
+            config.partnerRelyingParty = "https://grounds.example.com"
+        }
         val xboxAuthClient =
             FakeXboxAuthClient(
                 authenticateHandler = {
                     xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                 },
-                xstsHandler = {
+                minecraftXstsHandler = {
                     xboxResponse(
                         token = "xsts-token",
                         userHash = "xsts-uhs",
                         gamertag = "GroundsTag",
-                        xboxUserId = "281467",
+                    )
+                },
+                partnerXstsHandler = { _, _ ->
+                    xboxResponse(
+                        token = "partner-xsts-token",
+                        userHash = null,
+                        gamertag = "GroundsTag",
+                        partnerXboxUserId = "partner-123",
                     )
                 },
             )

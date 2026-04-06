@@ -22,7 +22,7 @@ class MinecraftIdentityContextFactoryTest {
         val context =
             factory.create(
                 ResolvedMinecraftIdentity(
-                    brokerUserId = "xbox-281467",
+                    brokerUserId = "xboxptx-partner-123",
                     username = "GroundsSteve",
                     loginIdentity = "java",
                     ownership =
@@ -34,12 +34,11 @@ class MinecraftIdentityContextFactoryTest {
                     minecraftJavaUuid = "12345678-9012-3456-7890-123456789012",
                     minecraftJavaUsername = "GroundsSteve",
                     xboxGamertag = "GroundsTag",
-                    xboxUserId = "281467",
                 )
             )
 
-        assertEquals("xbox-281467", context.id)
-        assertEquals("xbox-281467", context.brokerUserId)
+        assertEquals("xboxptx-partner-123", context.id)
+        assertEquals("xboxptx-partner-123", context.brokerUserId)
         assertEquals("groundssteve", context.username)
         assertEquals("java", context.getUserAttribute("minecraft_login_identity"))
         assertEquals("true", context.getUserAttribute("minecraft_java_owned"))
@@ -50,7 +49,6 @@ class MinecraftIdentityContextFactoryTest {
         )
         assertEquals("GroundsSteve", context.getUserAttribute("minecraft_java_username"))
         assertEquals("GroundsTag", context.getUserAttribute("xbox_gamertag"))
-        assertEquals("281467", context.getUserAttribute("xbox_user_id"))
     }
 
     @Test
@@ -58,7 +56,7 @@ class MinecraftIdentityContextFactoryTest {
         val context =
             factory.create(
                 ResolvedMinecraftIdentity(
-                    brokerUserId = "xboxuhs-xsts-uhs",
+                    brokerUserId = "xboxptx-partner-123",
                     username = "BedrockTag",
                     loginIdentity = "bedrock",
                     ownership =
@@ -71,7 +69,7 @@ class MinecraftIdentityContextFactoryTest {
                 )
             )
 
-        assertEquals("xboxuhs-xsts-uhs", context.id)
+        assertEquals("xboxptx-partner-123", context.id)
         assertEquals("bedrocktag", context.username)
         assertEquals("bedrock", context.getUserAttribute("minecraft_login_identity"))
         assertEquals("false", context.getUserAttribute("minecraft_java_owned"))
@@ -79,6 +77,5 @@ class MinecraftIdentityContextFactoryTest {
         assertEquals("BedrockTag", context.getUserAttribute("xbox_gamertag"))
         assertNull(context.getUserAttribute("minecraft_java_uuid"))
         assertNull(context.getUserAttribute("minecraft_java_username"))
-        assertNull(context.getUserAttribute("xbox_user_id"))
     }
 }

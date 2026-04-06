@@ -5,6 +5,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.keycloak.models.IdentityProviderModel
 import org.keycloak.provider.ProviderConfigProperty
@@ -25,6 +26,34 @@ class MinecraftIdentityProviderConfigTest {
         val config = MinecraftIdentityProviderConfig()
 
         assertFalse(config.syncRealName)
+    }
+
+    @Test
+    fun `partner relying party defaults to unset`() {
+        val config = MinecraftIdentityProviderConfig()
+
+        assertNull(config.partnerRelyingParty)
+    }
+
+    @Test
+    fun `partner relying party can be enabled`() {
+        val config =
+            MinecraftIdentityProviderConfig().apply {
+                partnerRelyingParty = "https://grounds.example.com"
+            }
+
+        assertEquals("https://grounds.example.com", config.partnerRelyingParty)
+    }
+
+    @Test
+    fun `partner xsts private key falls back to spi value`() {
+        val config =
+            MinecraftIdentityProviderConfig(
+                IdentityProviderModel(),
+                spiPartnerXstsPrivateKey = "file:/opt/keycloak/conf/xsts-private.pem",
+            )
+
+        assertEquals("file:/opt/keycloak/conf/xsts-private.pem", config.partnerXstsPrivateKey)
     }
 
     @Test
@@ -96,6 +125,28 @@ class MinecraftIdentityProviderConfigTest {
     }
 
     @Test
+    fun `missing partner relying party is rejected`() {
+        val config = MinecraftIdentityProviderConfig()
+
+        val exception =
+            assertFailsWith<IllegalArgumentException> { config.requirePartnerRelyingParty() }
+
+        assertContains(exception.message ?: "", "partnerRelyingParty")
+        assertContains(exception.message ?: "", "ptx")
+    }
+
+    @Test
+    fun `factory exposes partner relying party config property`() {
+        val property =
+            MinecraftIdentityProviderFactory().configProperties.single {
+                it.name == MinecraftIdentityProviderConfig.PARTNER_RELYING_PARTY
+            }
+
+        assertEquals("Partner Relying Party", property.label)
+        assertEquals(ProviderConfigProperty.STRING_TYPE, property.type)
+    }
+
+    @Test
     fun `factory exposes sync real name config property`() {
         val property =
             MinecraftIdentityProviderFactory().configProperties.single {
@@ -105,5 +156,16 @@ class MinecraftIdentityProviderConfigTest {
         assertEquals("Sync Real Name", property.label)
         assertEquals(ProviderConfigProperty.BOOLEAN_TYPE, property.type)
         assertEquals(false, property.defaultValue)
+    }
+
+    @Test
+    fun `factory exposes partner xsts private key config property`() {
+        val property =
+            MinecraftIdentityProviderFactory().configProperties.single {
+                it.name == MinecraftIdentityProviderConfig.PARTNER_XSTS_PRIVATE_KEY
+            }
+
+        assertEquals("Partner XSTS Private Key", property.label)
+        assertEquals(ProviderConfigProperty.STRING_TYPE, property.type)
     }
 }
