@@ -2,14 +2,28 @@ package gg.grounds.keycloak.minecraft.testsupport
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.nimbusds.jose.CompressionAlgorithm
+import com.nimbusds.jose.EncryptionMethod
+import com.nimbusds.jose.JWEAlgorithm
+import com.nimbusds.jose.JWEHeader
+import com.nimbusds.jose.JWEObject
+import com.nimbusds.jose.Payload
+import com.nimbusds.jose.crypto.RSAEncrypter
 import gg.grounds.keycloak.minecraft.MinecraftIdentityProvider
 import gg.grounds.keycloak.minecraft.api.MinecraftApi
 import gg.grounds.keycloak.minecraft.api.MinecraftClient
 import gg.grounds.keycloak.minecraft.api.XboxAuthApi
 import gg.grounds.keycloak.minecraft.api.XboxAuthClient
+import java.io.StringWriter
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.interfaces.RSAPublicKey
+import java.util.Base64
 import java.util.Optional
+import org.bouncycastle.openssl.jcajce.JcaMiscPEMGenerator
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import org.keycloak.broker.provider.AbstractIdentityProvider
 import org.keycloak.broker.provider.BrokeredIdentityContext
 import org.keycloak.events.EventBuilder
@@ -179,30 +193,94 @@ internal fun xboxResponse(
     token: String,
     userHash: String?,
     gamertag: String? = null,
+    partnerXboxUserId: String? = null,
 ): XboxAuthApi.XboxAuthResponse =
     XboxAuthApi.XboxAuthResponse(
         token = token,
         displayClaims =
             XboxAuthApi.DisplayClaims(
-                xui = listOf(XboxAuthApi.XuiClaim(uhs = userHash, gtg = gamertag))
+                xui =
+                    listOf(
+                        XboxAuthApi.XuiClaim(
+                            uhs = userHash,
+                            gtg = gamertag,
+                            ptx = partnerXboxUserId,
+                        )
+                    )
             ),
     )
 
+internal fun generateRsaKeyPair(): KeyPair =
+    KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+
+internal fun toPkcs8Pem(keyPair: KeyPair): String {
+    val encodedKey =
+        Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(keyPair.private.encoded)
+    return buildString {
+        appendLine("-----BEGIN PRIVATE KEY-----")
+        appendLine(encodedKey)
+        append("-----END PRIVATE KEY-----")
+    }
+}
+
+internal fun toPkcs1Pem(keyPair: KeyPair): String =
+    StringWriter().use { stringWriter ->
+        JcaPEMWriter(stringWriter).use { pemWriter ->
+            pemWriter.writeObject(JcaMiscPEMGenerator(keyPair.private))
+        }
+        stringWriter.toString()
+    }
+
+internal fun encryptedPartnerXstsToken(keyPair: KeyPair, claimsJson: String): String {
+    val header =
+        JWEHeader.Builder(JWEAlgorithm.parse("RSA-OAEP"), EncryptionMethod.A128CBC_HS256)
+            .contentType("JWT")
+            .compressionAlgorithm(CompressionAlgorithm.DEF)
+            .build()
+    val jweObject = JWEObject(header, Payload(unsignedJwt(claimsJson)))
+    jweObject.encrypt(RSAEncrypter(keyPair.public as RSAPublicKey))
+    return jweObject.serialize()
+}
+
+private fun unsignedJwt(claimsJson: String): String {
+    val encoder = Base64.getUrlEncoder().withoutPadding()
+    val header = encoder.encodeToString("""{"alg":"RS256","typ":"JWT"}""".toByteArray())
+    val payload = encoder.encodeToString(claimsJson.toByteArray())
+    val signature = encoder.encodeToString("signature".toByteArray())
+    return "$header.$payload.$signature"
+}
+
 internal class FakeXboxAuthClient(
     private val authenticateHandler: (String) -> XboxAuthApi.XboxAuthResponse,
-    private val xstsHandler: (String) -> XboxAuthApi.XboxAuthResponse,
+    private val minecraftXstsHandler: (String) -> XboxAuthApi.XboxAuthResponse,
+    private val partnerXstsHandler: (String, String) -> XboxAuthApi.XboxAuthResponse = { _, _ ->
+        xboxResponse(
+            token = "partner-xsts-token",
+            userHash = null,
+            partnerXboxUserId = "partner-123",
+        )
+    },
 ) : XboxAuthClient {
     val microsoftAccessTokens = mutableListOf<String>()
-    val xboxUserTokens = mutableListOf<String>()
+    val minecraftXstsUserTokens = mutableListOf<String>()
+    val partnerXstsRequests = mutableListOf<Pair<String, String>>()
 
     override fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthApi.XboxAuthResponse {
         microsoftAccessTokens += microsoftAccessToken
         return authenticateHandler(microsoftAccessToken)
     }
 
-    override fun obtainXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse {
-        xboxUserTokens += xboxUserToken
-        return xstsHandler(xboxUserToken)
+    override fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse {
+        minecraftXstsUserTokens += xboxUserToken
+        return minecraftXstsHandler(xboxUserToken)
+    }
+
+    override fun obtainPartnerXstsToken(
+        xboxUserToken: String,
+        relyingParty: String,
+    ): XboxAuthApi.XboxAuthResponse {
+        partnerXstsRequests += xboxUserToken to relyingParty
+        return partnerXstsHandler(xboxUserToken, relyingParty)
     }
 }
 

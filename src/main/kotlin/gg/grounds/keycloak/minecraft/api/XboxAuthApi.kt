@@ -16,7 +16,12 @@ import java.time.Duration
 interface XboxAuthClient {
     fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthApi.XboxAuthResponse
 
-    fun obtainXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse
+    fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse
+
+    fun obtainPartnerXstsToken(
+        xboxUserToken: String,
+        relyingParty: String,
+    ): XboxAuthApi.XboxAuthResponse
 }
 
 /** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
@@ -70,12 +75,20 @@ class XboxAuthApi : XboxAuthClient {
      * Obtains an XSTS token scoped to Minecraft services. Throws XboxAuthException for known Xbox
      * Live error codes.
      */
-    override fun obtainXstsToken(xboxUserToken: String): XboxAuthResponse {
+    override fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthResponse =
+        obtainXstsToken(xboxUserToken, "rp://api.minecraftservices.com/")
+
+    override fun obtainPartnerXstsToken(
+        xboxUserToken: String,
+        relyingParty: String,
+    ): XboxAuthResponse = obtainXstsToken(xboxUserToken, relyingParty)
+
+    private fun obtainXstsToken(xboxUserToken: String, relyingParty: String): XboxAuthResponse {
         val requestBody =
             mapOf(
                 "Properties" to
                     mapOf("SandboxId" to "RETAIL", "UserTokens" to listOf(xboxUserToken)),
-                "RelyingParty" to "rp://api.minecraftservices.com/",
+                "RelyingParty" to relyingParty,
                 "TokenType" to "JWT",
             )
 
@@ -131,6 +144,12 @@ class XboxAuthApi : XboxAuthClient {
 
         val gamertag: String?
             get() = displayClaims?.xui?.firstOrNull()?.gtg
+
+        val partnerXboxUserId: String?
+            get() = displayClaims?.xui?.firstOrNull()?.ptx
+
+        val displayClaimKeys: Set<String>
+            get() = displayClaims?.xui?.firstOrNull()?.claimKeys ?: emptySet()
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -144,7 +163,21 @@ class XboxAuthApi : XboxAuthClient {
     constructor(
         @param:JsonProperty("uhs") val uhs: String?,
         @param:JsonProperty("gtg") val gtg: String?,
-    )
+        @param:JsonProperty("ptx") val ptx: String? = null,
+    ) {
+        val claimKeys: Set<String>
+            get() = buildSet {
+                if (!uhs.isNullOrBlank()) {
+                    add("uhs")
+                }
+                if (!gtg.isNullOrBlank()) {
+                    add("gtg")
+                }
+                if (!ptx.isNullOrBlank()) {
+                    add("ptx")
+                }
+            }
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class XstsErrorResponse

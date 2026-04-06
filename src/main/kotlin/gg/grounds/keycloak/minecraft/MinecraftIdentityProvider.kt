@@ -3,8 +3,13 @@ package gg.grounds.keycloak.minecraft
 import com.fasterxml.jackson.databind.JsonNode
 import gg.grounds.keycloak.minecraft.identity.MinecraftIdentityContextFactory
 import gg.grounds.keycloak.minecraft.identity.MinecraftIdentityResolver
+import gg.grounds.keycloak.minecraft.identity.PartnerXstsTokenInspector
+import gg.grounds.keycloak.minecraft.sync.MinecraftBrokeredAttributes
 import gg.grounds.keycloak.minecraft.sync.MinecraftBrokeredUserSynchronizer
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import org.jboss.logging.Logger
 import org.keycloak.broker.oidc.AbstractOAuth2IdentityProvider
 import org.keycloak.broker.provider.BrokeredIdentityContext
@@ -26,7 +31,11 @@ import org.keycloak.vault.VaultStringSecret
 class MinecraftIdentityProvider(
     session: KeycloakSession,
     config: MinecraftIdentityProviderConfig,
-    private val identityResolver: MinecraftIdentityResolver = MinecraftIdentityResolver(),
+    private val identityResolver: MinecraftIdentityResolver =
+        MinecraftIdentityResolver(
+            partnerRelyingParty = config.requirePartnerRelyingPartyForBroker(),
+            partnerTokenInspector = createPartnerTokenInspector(session, config),
+        ),
     private val identityContextFactory: MinecraftIdentityContextFactory =
         MinecraftIdentityContextFactory(config),
     private val userSynchronizer: MinecraftBrokeredUserSynchronizer =
@@ -41,7 +50,13 @@ class MinecraftIdentityProvider(
     ) : this(
         session,
         config,
-        identityResolver = MinecraftIdentityResolver(xboxAuthClient, minecraftClient),
+        identityResolver =
+            MinecraftIdentityResolver(
+                xboxAuthClient,
+                minecraftClient,
+                config.requirePartnerRelyingPartyForBroker(),
+                createPartnerTokenInspector(session, config),
+            ),
         identityContextFactory = MinecraftIdentityContextFactory(config),
         userSynchronizer = MinecraftBrokeredUserSynchronizer(config),
     )
@@ -89,12 +104,28 @@ class MinecraftIdentityProvider(
     }
 
     private fun BrokeredIdentityContext.applyMicrosoftProfile(idTokenClaims: JsonNode) {
-        idTokenClaims.getClaimText("email")?.let { email = it }
+        val emailClaim = idTokenClaims.getClaimText("email")
+        val nameClaim = idTokenClaims.getClaimText("name")
+        val givenNameClaim = idTokenClaims.getClaimText("given_name")
+        val familyNameClaim = idTokenClaims.getClaimText("family_name")
+
+        logger.debugf(
+            "Resolved Microsoft profile claims (provider=%s, emailPresent=%s, namePresent=%s, givenNamePresent=%s, familyNamePresent=%s, syncRealNameEnabled=%s)",
+            PROVIDER_ID,
+            emailClaim != null,
+            nameClaim != null,
+            givenNameClaim != null,
+            familyNameClaim != null,
+            config.syncRealName,
+        )
+
+        emailClaim?.let { email = it }
         if (!config.syncRealName) {
             return
         }
-        idTokenClaims.getClaimText("given_name")?.let { firstName = it }
-        idTokenClaims.getClaimText("family_name")?.let { lastName = it }
+        nameClaim?.let { setUserAttribute(MinecraftBrokeredAttributes.MICROSOFT_NAME, it) }
+        givenNameClaim?.let { firstName = it }
+        familyNameClaim?.let { lastName = it }
     }
 
     override fun getProfileEndpointForValidation(event: EventBuilder?): String? = null
@@ -102,6 +133,7 @@ class MinecraftIdentityProvider(
     /** Use Keycloak's standard token-request handling after enforcing Microsoft's auth mode. */
     override fun authenticateTokenRequest(tokenRequest: SimpleHttpRequest): SimpleHttpRequest {
         config.requireSupportedClientAuthMethodForBroker()
+        config.requirePartnerRelyingPartyForBroker()
         requireConfiguredCredential("clientId", config.clientId)
         val clientSecret = requireConfiguredCredential("clientSecret", config.clientSecret)
         requireResolvedVaultSecret("clientSecret", clientSecret)
@@ -143,7 +175,16 @@ class MinecraftIdentityProvider(
     private fun extractMicrosoftIdTokenClaims(response: String): JsonNode? =
         try {
             val tokenResponse = JsonSerialization.readValue(response, OAuthResponse::class.java)
-            val rawIdToken = tokenResponse.idToken ?: return null
+            val rawIdToken =
+                tokenResponse.idToken
+                    ?: run {
+                        logger.debugf(
+                            "Skipped Microsoft ID token extraction (provider=%s, reason=%s)",
+                            PROVIDER_ID,
+                            "id_token_missing",
+                        )
+                        return null
+                    }
             JsonSerialization.mapper.readTree(JWSInput(rawIdToken).content)
         } catch (e: IOException) {
             logger.debugf(
@@ -173,5 +214,74 @@ class MinecraftIdentityProvider(
         const val PROVIDER_ID = "minecraft"
         private const val VAULT_REFERENCE_PREFIX = "vault:"
         private val logger = Logger.getLogger(MinecraftIdentityProvider::class.java)
+
+        private fun createPartnerTokenInspector(
+            session: KeycloakSession,
+            config: MinecraftIdentityProviderConfig,
+        ): PartnerXstsTokenInspector =
+            try {
+                PartnerXstsTokenInspector.fromPemReference(
+                    resolveOptionalConfiguredSecret(
+                        session,
+                        "partnerXstsPrivateKey",
+                        config.partnerXstsPrivateKey,
+                    )
+                )
+            } catch (e: IdentityBrokerException) {
+                throw e
+            } catch (e: Exception) {
+                throw IdentityBrokerException(
+                    "Minecraft identity provider could not load `partnerXstsPrivateKey`.",
+                    e,
+                )
+            }
+
+        private fun resolveOptionalConfiguredSecret(
+            session: KeycloakSession,
+            name: String,
+            value: String?,
+        ): String? {
+            val trimmedValue = value?.takeIf { it.isNotBlank() } ?: return null
+            if (trimmedValue.startsWith(VAULT_REFERENCE_PREFIX)) {
+                return resolveVaultSecret(session, name, trimmedValue)
+            }
+
+            return when {
+                trimmedValue.startsWith("file:") ->
+                    Files.readString(Paths.get(java.net.URI.create(trimmedValue)))
+                trimmedValue.startsWith("/") ||
+                    trimmedValue.startsWith("./") ||
+                    trimmedValue.startsWith("../") -> Files.readString(Path.of(trimmedValue))
+                else -> trimmedValue
+            }
+        }
+
+        private fun resolveVaultSecret(
+            session: KeycloakSession,
+            name: String,
+            value: String,
+        ): String {
+            try {
+                session.vault().getStringSecret(value).use { vaultSecret: VaultStringSecret ->
+                    val resolvedSecret =
+                        vaultSecret
+                            .get()
+                            .filter { it.isNotBlank() }
+                            .orElseThrow {
+                                IdentityBrokerException(
+                                    "Minecraft identity provider could not resolve `$name` from Keycloak vault."
+                                )
+                            }
+                    return resolvedSecret
+                }
+            } catch (e: IdentityBrokerException) {
+                throw e
+            } catch (e: RuntimeException) {
+                throw IdentityBrokerException(
+                    "Minecraft identity provider could not resolve `$name` from Keycloak vault.",
+                    e,
+                )
+            }
+        }
     }
 }

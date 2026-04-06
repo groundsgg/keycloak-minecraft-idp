@@ -6,6 +6,10 @@ import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthenticationFailureException
 import gg.grounds.keycloak.minecraft.testsupport.FakeMinecraftClient
 import gg.grounds.keycloak.minecraft.testsupport.FakeXboxAuthClient
+import gg.grounds.keycloak.minecraft.testsupport.encryptedPartnerXstsToken
+import gg.grounds.keycloak.minecraft.testsupport.generateRsaKeyPair
+import gg.grounds.keycloak.minecraft.testsupport.toPkcs1Pem
+import gg.grounds.keycloak.minecraft.testsupport.toPkcs8Pem
 import gg.grounds.keycloak.minecraft.testsupport.xboxResponse
 import java.io.IOException
 import kotlin.test.Test
@@ -24,11 +28,20 @@ class MinecraftIdentityResolverTest {
                 authenticateHandler = {
                     xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                 },
-                xstsHandler = {
+                minecraftXstsHandler = {
                     xboxResponse(
                         token = "xsts-token",
                         userHash = "xsts-uhs",
                         gamertag = "GroundsTag",
+                    )
+                },
+                partnerXstsHandler = { _, relyingParty ->
+                    assertEquals("https://grounds.example.com", relyingParty)
+                    xboxResponse(
+                        token = "partner-xsts-token",
+                        userHash = null,
+                        gamertag = "PartnerTag",
+                        partnerXboxUserId = "partner-281467",
                     )
                 },
             )
@@ -59,14 +72,23 @@ class MinecraftIdentityResolverTest {
             )
 
         val identity =
-            MinecraftIdentityResolver(xboxAuthClient, minecraftClient).resolve("ms-access-token")
+            MinecraftIdentityResolver(
+                    xboxAuthClient,
+                    minecraftClient,
+                    "https://grounds.example.com",
+                )
+                .resolve("ms-access-token")
 
         assertEquals(listOf("ms-access-token"), xboxAuthClient.microsoftAccessTokens)
-        assertEquals(listOf("xbox-user-token"), xboxAuthClient.xboxUserTokens)
+        assertEquals(listOf("xbox-user-token"), xboxAuthClient.minecraftXstsUserTokens)
+        assertEquals(
+            listOf("xbox-user-token" to "https://grounds.example.com"),
+            xboxAuthClient.partnerXstsRequests,
+        )
         assertEquals(listOf("xsts-uhs" to "xsts-token"), minecraftClient.minecraftAuthRequests)
         assertEquals(listOf("minecraft-token"), minecraftClient.ownershipRequests)
         assertEquals(listOf("minecraft-token"), minecraftClient.profileRequests)
-        assertEquals("xboxuhs-xsts-uhs", identity.brokerUserId)
+        assertEquals("xboxptx-partner-281467", identity.brokerUserId)
         assertEquals("GroundsSteve", identity.username)
         assertEquals("java", identity.loginIdentity)
         assertEquals("12345678-9012-3456-7890-123456789012", identity.minecraftJavaUuid)
@@ -81,7 +103,7 @@ class MinecraftIdentityResolverTest {
                 authenticateHandler = {
                     xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                 },
-                xstsHandler = {
+                minecraftXstsHandler = {
                     xboxResponse(
                         token = "xsts-token",
                         userHash = "xsts-uhs",
@@ -111,9 +133,14 @@ class MinecraftIdentityResolverTest {
             )
 
         val identity =
-            MinecraftIdentityResolver(xboxAuthClient, minecraftClient).resolve("ms-access-token")
+            MinecraftIdentityResolver(
+                    xboxAuthClient,
+                    minecraftClient,
+                    "https://grounds.example.com",
+                )
+                .resolve("ms-access-token")
 
-        assertEquals("xboxuhs-xsts-uhs", identity.brokerUserId)
+        assertEquals("xboxptx-partner-123", identity.brokerUserId)
         assertEquals("BedrockTag", identity.username)
         assertEquals("bedrock", identity.loginIdentity)
         assertEquals(null, identity.minecraftJavaUuid)
@@ -129,7 +156,7 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         xboxResponse(
                             token = "xsts-token",
                             userHash = "xsts-uhs",
@@ -156,6 +183,7 @@ class MinecraftIdentityResolverTest {
                         error("Profile should not be requested when no entitlements exist")
                     },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -175,7 +203,7 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         xboxResponse(
                             token = "xsts-token",
                             userHash = "xsts-uhs",
@@ -202,6 +230,7 @@ class MinecraftIdentityResolverTest {
                         throw MinecraftProfileNotFoundException("The user has no Java profile")
                     },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -225,7 +254,7 @@ class MinecraftIdentityResolverTest {
                             redirectUrl = null,
                         )
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         error("XSTS should not be requested when Xbox authentication fails")
                     },
                 ),
@@ -236,6 +265,7 @@ class MinecraftIdentityResolverTest {
                     ownershipHandler = { error("Ownership should not be reached") },
                     profileHandler = { error("Profile should not be reached") },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -255,7 +285,7 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         xboxResponse(
                             token = "xsts-token",
                             userHash = null,
@@ -270,6 +300,7 @@ class MinecraftIdentityResolverTest {
                     ownershipHandler = { error("Ownership should not be reached") },
                     profileHandler = { error("Profile should not be reached") },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -284,9 +315,10 @@ class MinecraftIdentityResolverTest {
             MinecraftIdentityResolver(
                 FakeXboxAuthClient(
                     authenticateHandler = { throw IOException("upstream Xbox failure") },
-                    xstsHandler = { error("XSTS should not be called") },
+                    minecraftXstsHandler = { error("XSTS should not be called") },
                 ),
                 unusedMinecraftClient(),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -310,9 +342,10 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = { throw IOException("upstream XSTS failure") },
+                    minecraftXstsHandler = { throw IOException("upstream XSTS failure") },
                 ),
                 unusedMinecraftClient(),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -322,10 +355,42 @@ class MinecraftIdentityResolverTest {
         assertTrue(exception.cause is XboxAuthenticationFailureException)
         assertTrue(exception.cause?.cause is IOException)
         assertEquals(
-            "obtain_xsts_token",
+            "obtain_minecraft_xsts_token",
             (exception.cause as XboxAuthenticationFailureException).stage,
         )
         assertEquals("upstream XSTS failure", exception.cause?.cause?.message)
+    }
+
+    @Test
+    fun `reports partner XSTS io failures explicitly`() {
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(token = "xsts-token", userHash = "xsts-uhs")
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        throw IOException("upstream partner XSTS failure")
+                    },
+                ),
+                unusedMinecraftClient(),
+                "https://grounds.example.com",
+            )
+
+        val exception =
+            assertFailsWith<IdentityBrokerException> { resolver.resolve("ms-access-token") }
+
+        assertEquals("Xbox Live authentication failed. Please try again.", exception.message)
+        assertTrue(exception.cause is XboxAuthenticationFailureException)
+        assertTrue(exception.cause?.cause is IOException)
+        assertEquals(
+            "obtain_partner_xsts_token",
+            (exception.cause as XboxAuthenticationFailureException).stage,
+        )
+        assertEquals("upstream partner XSTS failure", exception.cause?.cause?.message)
     }
 
     @Test
@@ -336,7 +401,7 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         xboxResponse(
                             token = "xsts-token",
                             userHash = "xsts-uhs",
@@ -351,6 +416,7 @@ class MinecraftIdentityResolverTest {
                     ownershipHandler = { error("Ownership should not be called") },
                     profileHandler = { error("Profile should not be called") },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
@@ -367,9 +433,10 @@ class MinecraftIdentityResolverTest {
             MinecraftIdentityResolver(
                 FakeXboxAuthClient(
                     authenticateHandler = { throw InterruptedException("request interrupted") },
-                    xstsHandler = { error("XSTS should not be called") },
+                    minecraftXstsHandler = { error("XSTS should not be called") },
                 ),
                 unusedMinecraftClient(),
+                "https://grounds.example.com",
             )
 
         try {
@@ -393,8 +460,16 @@ class MinecraftIdentityResolverTest {
                     authenticateHandler = {
                         xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
                     },
-                    xstsHandler = {
+                    minecraftXstsHandler = {
                         xboxResponse(token = "xsts-token", userHash = "xsts-uhs", gamertag = null)
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = "partner-xsts-token",
+                            userHash = null,
+                            gamertag = null,
+                            partnerXboxUserId = "partner-123",
+                        )
                     },
                 ),
                 FakeMinecraftClient(
@@ -416,12 +491,399 @@ class MinecraftIdentityResolverTest {
                         error("Profile should not be requested for Bedrock-only flow")
                     },
                 ),
+                "https://grounds.example.com",
             )
 
         val exception =
             assertFailsWith<IdentityBrokerException> { resolver.resolve("ms-access-token") }
 
         assertEquals("Could not retrieve Xbox Gamertag for Bedrock user", exception.message)
+    }
+
+    @Test
+    fun `rejects partner XSTS responses without ptx`() {
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(
+                            token = "xsts-token",
+                            userHash = "xsts-uhs",
+                            gamertag = "GroundsTag",
+                        )
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = "partner-xsts-token",
+                            userHash = null,
+                            gamertag = "PartnerTag",
+                        )
+                    },
+                ),
+                unusedMinecraftClient(),
+                "https://grounds.example.com",
+            )
+
+        val exception =
+            assertFailsWith<IdentityBrokerException> { resolver.resolve("ms-access-token") }
+
+        assertEquals(
+            "Xbox partner token did not return ptx claim. Verify the partner relying party configuration or configure `partnerXstsPrivateKey` for encrypted partner tokens.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `keeps direct partner ptx when configured decryption fails`() {
+        val encryptionKeyPair = generateRsaKeyPair()
+        val decryptionKeyPair = generateRsaKeyPair()
+        val encryptedPartnerToken =
+            encryptedPartnerXstsToken(
+                encryptionKeyPair,
+                """{"xui":[{"gtg":"EncryptedTag","ptx":"partner-encrypted"}],"iss":"xsts"}""",
+            )
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(
+                            token = "xsts-token",
+                            userHash = "xsts-uhs",
+                            gamertag = "GroundsTag",
+                        )
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = encryptedPartnerToken,
+                            userHash = null,
+                            gamertag = "PartnerTag",
+                            partnerXboxUserId = "partner-direct",
+                        )
+                    },
+                ),
+                FakeMinecraftClient(
+                    authenticateHandler = { _, _ ->
+                        MinecraftApi.MinecraftAuthResponse(
+                            accessToken = "minecraft-token",
+                            tokenType = "Bearer",
+                            expiresIn = 3600,
+                        )
+                    },
+                    ownershipHandler = {
+                        MinecraftApi.Ownership(
+                            entitlementNames = setOf("product_minecraft"),
+                            ownsJavaEdition = true,
+                            ownsBedrockEdition = false,
+                        )
+                    },
+                    profileHandler = {
+                        MinecraftApi.MinecraftProfile(
+                            id = "12345678901234567890123456789012",
+                            name = "GroundsSteve",
+                            skins = null,
+                            capes = null,
+                        )
+                    },
+                ),
+                "https://grounds.example.com",
+                PartnerXstsTokenInspector.fromPemReference(toPkcs8Pem(decryptionKeyPair)),
+            )
+
+        val identity = resolver.resolve("ms-access-token")
+
+        assertEquals("xboxptx-partner-direct", identity.brokerUserId)
+        assertEquals("GroundsSteve", identity.username)
+        assertEquals("GroundsTag", identity.xboxGamertag)
+    }
+
+    @Test
+    fun `keeps decryption failure when partner token header is malformed`() {
+        val keyPair = generateRsaKeyPair()
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(
+                            token = "xsts-token",
+                            userHash = "xsts-uhs",
+                            gamertag = "GroundsTag",
+                        )
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = "%%%.payload.part3.part4.part5",
+                            userHash = null,
+                            gamertag = "GroundsTag",
+                            partnerXboxUserId = null,
+                        )
+                    },
+                ),
+                unusedMinecraftClient(),
+                "https://grounds.example.com",
+                PartnerXstsTokenInspector.fromPemReference(toPkcs8Pem(keyPair)),
+            )
+
+        val exception =
+            assertFailsWith<IdentityBrokerException> { resolver.resolve("ms-access-token") }
+
+        assertEquals(
+            "Xbox partner token decryption failed. Verify `partnerXstsPrivateKey` for the configured relying party.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `resolves partner ptx from encrypted token when display claims omit it`() {
+        val keyPair = generateRsaKeyPair()
+        val encryptedPartnerToken =
+            encryptedPartnerXstsToken(
+                keyPair,
+                """{"xui":[{"gtg":"GroundsTag","ptx":"partner-987"}],"iss":"xsts"}""",
+            )
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(
+                            token = "xsts-token",
+                            userHash = "xsts-uhs",
+                            gamertag = "GroundsTag",
+                        )
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = encryptedPartnerToken,
+                            userHash = null,
+                            gamertag = "GroundsTag",
+                            partnerXboxUserId = null,
+                        )
+                    },
+                ),
+                FakeMinecraftClient(
+                    authenticateHandler = { _, _ ->
+                        MinecraftApi.MinecraftAuthResponse(
+                            accessToken = "minecraft-token",
+                            tokenType = "Bearer",
+                            expiresIn = 3600,
+                        )
+                    },
+                    ownershipHandler = {
+                        MinecraftApi.Ownership(
+                            entitlementNames = setOf("product_minecraft"),
+                            ownsJavaEdition = true,
+                            ownsBedrockEdition = false,
+                        )
+                    },
+                    profileHandler = {
+                        MinecraftApi.MinecraftProfile(
+                            id = "12345678901234567890123456789012",
+                            name = "GroundsSteve",
+                            skins = null,
+                            capes = null,
+                        )
+                    },
+                ),
+                "rp://grounds.gg/",
+                PartnerXstsTokenInspector.fromPemReference(toPkcs8Pem(keyPair)),
+            )
+
+        val identity = resolver.resolve("ms-access-token")
+
+        assertEquals("xboxptx-partner-987", identity.brokerUserId)
+        assertEquals("GroundsSteve", identity.username)
+        assertEquals("GroundsTag", identity.xboxGamertag)
+    }
+
+    @Test
+    fun `resolves gamertag from encrypted partner token when display claims omit it`() {
+        val keyPair = generateRsaKeyPair()
+        val encryptedPartnerToken =
+            encryptedPartnerXstsToken(
+                keyPair,
+                """{"xui":[{"gtg":"EncryptedTag","ptx":"partner-654"}],"iss":"xsts"}""",
+            )
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(token = "xsts-token", userHash = "xsts-uhs", gamertag = null)
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = encryptedPartnerToken,
+                            userHash = null,
+                            gamertag = null,
+                            partnerXboxUserId = null,
+                        )
+                    },
+                ),
+                FakeMinecraftClient(
+                    authenticateHandler = { _, _ ->
+                        MinecraftApi.MinecraftAuthResponse(
+                            accessToken = "minecraft-token",
+                            tokenType = "Bearer",
+                            expiresIn = 3600,
+                        )
+                    },
+                    ownershipHandler = {
+                        MinecraftApi.Ownership(
+                            entitlementNames = setOf("product_minecraft"),
+                            ownsJavaEdition = true,
+                            ownsBedrockEdition = false,
+                        )
+                    },
+                    profileHandler = {
+                        MinecraftApi.MinecraftProfile(
+                            id = "12345678901234567890123456789012",
+                            name = "GroundsSteve",
+                            skins = null,
+                            capes = null,
+                        )
+                    },
+                ),
+                "rp://grounds.gg/",
+                PartnerXstsTokenInspector.fromPemReference(toPkcs8Pem(keyPair)),
+            )
+
+        val identity = resolver.resolve("ms-access-token")
+
+        assertEquals("EncryptedTag", identity.xboxGamertag)
+    }
+
+    @Test
+    fun `resolves encrypted partner token with PKCS1 private key`() {
+        val keyPair = generateRsaKeyPair()
+        val encryptedPartnerToken =
+            encryptedPartnerXstsToken(
+                keyPair,
+                """{"xui":[{"gtg":"Pkcs1Tag","ptx":"partner-pkcs1"}],"iss":"xsts"}""",
+            )
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(token = "xsts-token", userHash = "xsts-uhs", gamertag = null)
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = encryptedPartnerToken,
+                            userHash = null,
+                            gamertag = null,
+                            partnerXboxUserId = null,
+                        )
+                    },
+                ),
+                FakeMinecraftClient(
+                    authenticateHandler = { _, _ ->
+                        MinecraftApi.MinecraftAuthResponse(
+                            accessToken = "minecraft-token",
+                            tokenType = "Bearer",
+                            expiresIn = 3600,
+                        )
+                    },
+                    ownershipHandler = {
+                        MinecraftApi.Ownership(
+                            entitlementNames = setOf("product_minecraft"),
+                            ownsJavaEdition = true,
+                            ownsBedrockEdition = false,
+                        )
+                    },
+                    profileHandler = {
+                        MinecraftApi.MinecraftProfile(
+                            id = "12345678901234567890123456789012",
+                            name = "GroundsSteve",
+                            skins = null,
+                            capes = null,
+                        )
+                    },
+                ),
+                "rp://grounds.gg/",
+                PartnerXstsTokenInspector.fromPemReference(toPkcs1Pem(keyPair)),
+            )
+
+        val identity = resolver.resolve("ms-access-token")
+
+        assertEquals("xboxptx-partner-pkcs1", identity.brokerUserId)
+        assertEquals("Pkcs1Tag", identity.xboxGamertag)
+    }
+
+    @Test
+    fun `resolves encrypted partner token with single-field pasted PKCS8 key`() {
+        val keyPair = generateRsaKeyPair()
+        val encryptedPartnerToken =
+            encryptedPartnerXstsToken(
+                keyPair,
+                """{"xui":[{"gtg":"PastedTag","ptx":"partner-pasted"}],"iss":"xsts"}""",
+            )
+        val pastedPem = toPkcs8Pem(keyPair).replace("\n", " ")
+        val resolver =
+            MinecraftIdentityResolver(
+                FakeXboxAuthClient(
+                    authenticateHandler = {
+                        xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                    },
+                    minecraftXstsHandler = {
+                        xboxResponse(token = "xsts-token", userHash = "xsts-uhs", gamertag = null)
+                    },
+                    partnerXstsHandler = { _, _ ->
+                        xboxResponse(
+                            token = encryptedPartnerToken,
+                            userHash = null,
+                            gamertag = null,
+                            partnerXboxUserId = null,
+                        )
+                    },
+                ),
+                FakeMinecraftClient(
+                    authenticateHandler = { _, _ ->
+                        MinecraftApi.MinecraftAuthResponse(
+                            accessToken = "minecraft-token",
+                            tokenType = "Bearer",
+                            expiresIn = 3600,
+                        )
+                    },
+                    ownershipHandler = {
+                        MinecraftApi.Ownership(
+                            entitlementNames = setOf("product_minecraft"),
+                            ownsJavaEdition = true,
+                            ownsBedrockEdition = false,
+                        )
+                    },
+                    profileHandler = {
+                        MinecraftApi.MinecraftProfile(
+                            id = "12345678901234567890123456789012",
+                            name = "GroundsSteve",
+                            skins = null,
+                            capes = null,
+                        )
+                    },
+                ),
+                "rp://grounds.gg/",
+                PartnerXstsTokenInspector.fromPemReference(pastedPem),
+            )
+
+        val identity = resolver.resolve("ms-access-token")
+
+        assertEquals("xboxptx-partner-pasted", identity.brokerUserId)
+        assertEquals("PastedTag", identity.xboxGamertag)
     }
 
     private fun unusedMinecraftClient(): FakeMinecraftClient =

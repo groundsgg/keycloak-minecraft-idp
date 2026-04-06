@@ -22,14 +22,29 @@ class MinecraftIdentityProviderConfig(
     model: IdentityProviderModel,
     private val spiClientId: String? = null,
     private val spiClientSecret: String? = null,
+    private val spiPartnerXstsPrivateKey: String? = null,
 ) : OAuth2IdentityProviderConfig(model) {
 
     constructor() : this(IdentityProviderModel())
+
+    var partnerRelyingParty: String?
+        get() = config[PARTNER_RELYING_PARTY]?.takeIf { it.isNotBlank() }
+        set(value) {
+            config[PARTNER_RELYING_PARTY] = value
+        }
 
     var syncRealName: Boolean
         get() = config[SYNC_REAL_NAME]?.toBooleanStrictOrNull() ?: false
         set(value) {
             config[SYNC_REAL_NAME] = value.toString()
+        }
+
+    var partnerXstsPrivateKey: String?
+        get() =
+            config[PARTNER_XSTS_PRIVATE_KEY]?.takeIf { it.isNotBlank() }
+                ?: spiPartnerXstsPrivateKey?.takeIf { it.isNotBlank() }
+        set(value) {
+            config[PARTNER_XSTS_PRIVATE_KEY] = value
         }
 
     /** Admin UI value takes precedence; falls back to SPI/env-var value. */
@@ -49,6 +64,7 @@ class MinecraftIdentityProviderConfig(
     override fun validate(realm: RealmModel) {
         super.validate(realm)
         requireSupportedClientAuthMethod()
+        requirePartnerRelyingParty()
     }
 
     internal fun requireSupportedClientAuthMethod() {
@@ -69,13 +85,26 @@ class MinecraftIdentityProviderConfig(
         }
     }
 
+    internal fun requirePartnerRelyingParty() {
+        requireNotNull(partnerRelyingParty) { missingPartnerRelyingPartyMessage() }
+    }
+
+    internal fun requirePartnerRelyingPartyForBroker(): String =
+        partnerRelyingParty ?: throw IdentityBrokerException(missingPartnerRelyingPartyMessage())
+
     private fun unsupportedClientAuthMethodMessage(configuredClientAuthMethod: String?): String =
         "Minecraft identity provider supports only `$CLIENT_SECRET_POST` " +
             "for the Microsoft token endpoint " +
             "(configuredClientAuthMethod=$configuredClientAuthMethod)."
 
+    private fun missingPartnerRelyingPartyMessage(): String =
+        "Minecraft identity provider is missing `partnerRelyingParty`. " +
+            "Configure the partner relying party that returns the Xbox ptx claim."
+
     companion object {
         internal const val CLIENT_SECRET_POST = "client_secret_post"
+        internal const val PARTNER_RELYING_PARTY = "partnerRelyingParty"
+        internal const val PARTNER_XSTS_PRIVATE_KEY = "partnerXstsPrivateKey"
         internal const val SYNC_REAL_NAME = "syncRealName"
     }
 }

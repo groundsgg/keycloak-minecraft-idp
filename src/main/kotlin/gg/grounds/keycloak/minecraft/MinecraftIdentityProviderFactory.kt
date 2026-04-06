@@ -28,12 +28,14 @@ class MinecraftIdentityProviderFactory :
 
     private var spiClientId: String? = null
     private var spiClientSecret: String? = null
+    private var spiPartnerXstsPrivateKey: String? = null
 
     /** Called once at server startup. Reads SPI-level config (env vars / kc.sh flags). */
     override fun init(config: Config.Scope) {
         // Keycloak maps KC_SPI_IDENTITY_PROVIDER_MINECRAFT_CLIENT_ID → "client-id" (kebab-case)
         spiClientId = config.get("client-id")
         spiClientSecret = config.get("client-secret")
+        spiPartnerXstsPrivateKey = config.get("partner-xsts-private-key")
 
         when {
             spiClientId != null && spiClientSecret != null ->
@@ -62,6 +64,15 @@ class MinecraftIdentityProviderFactory :
     override fun getConfigProperties(): List<ProviderConfigProperty> =
         ProviderConfigurationBuilder.create()
             .property()
+            .name(MinecraftIdentityProviderConfig.PARTNER_RELYING_PARTY)
+            .label("Partner Relying Party")
+            .helpText(
+                "Required Xbox partner relying party used to request a partner XSTS token " +
+                    "that returns the ptx claim for stable account linking."
+            )
+            .type(ProviderConfigProperty.STRING_TYPE)
+            .add()
+            .property()
             .name(MinecraftIdentityProviderConfig.SYNC_REAL_NAME)
             .label("Sync Real Name")
             .helpText(
@@ -71,6 +82,16 @@ class MinecraftIdentityProviderFactory :
             .type(ProviderConfigProperty.BOOLEAN_TYPE)
             .defaultValue(false)
             .add()
+            .property()
+            .name(MinecraftIdentityProviderConfig.PARTNER_XSTS_PRIVATE_KEY)
+            .label("Partner XSTS Private Key")
+            .helpText(
+                "Optional private key used to decrypt encrypted partner XSTS tokens when the " +
+                    "ptx claim is not exposed in DisplayClaims. Supports raw PEM, file paths, " +
+                    "or file: URIs."
+            )
+            .type(ProviderConfigProperty.STRING_TYPE)
+            .add()
             .build()
 
     override fun create(
@@ -79,7 +100,12 @@ class MinecraftIdentityProviderFactory :
     ): MinecraftIdentityProvider =
         MinecraftIdentityProvider(
             session,
-            MinecraftIdentityProviderConfig(model, spiClientId, spiClientSecret),
+            MinecraftIdentityProviderConfig(
+                model,
+                spiClientId,
+                spiClientSecret,
+                spiPartnerXstsPrivateKey,
+            ),
         )
 
     override fun createConfig(): MinecraftIdentityProviderConfig = MinecraftIdentityProviderConfig()
