@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,6 +28,21 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Resolve release metadata
+        run: |
+          if [[ ! "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            echo "Failed to resolve release metadata (gitRef=${GITHUB_REF:-<empty>})"
+            exit 1
+          fi
+
+          tag_name="${GITHUB_REF#refs/tags/}"
+          version_override="${tag_name#v}"
+
+          echo "TAG_NAME=$tag_name" >> "$GITHUB_ENV"
+          echo "VERSION_OVERRIDE=$version_override" >> "$GITHUB_ENV"
+          echo "JAR_PATH=build/libs/keycloak-minecraft-idp.jar" >> "$GITHUB_ENV"
+          echo "RELEASE_ASSET_PATH=build/libs/keycloak-minecraft-idp-$version_override.jar" >> "$GITHUB_ENV"
+
       - name: Configure GitHub Packages credentials
         run: |
           mkdir -p ~/.gradle
@@ -42,12 +56,22 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ ! "${GITHUB_REF:-}" == refs/tags/v* ]]; then
-            echo "Expected a v* tag ref but received ${GITHUB_REF:-<empty>}"
+          ./gradlew publish -PversionOverride="$VERSION_OVERRIDE"
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ ! -f "$JAR_PATH" ]]; then
+            echo "Failed to upload release asset (jarPath=$JAR_PATH, reason=asset_not_found)"
             exit 1
           fi
 
-          tag_name="${GITHUB_REF#refs/tags/}"
-          version_override="${tag_name#v}"
+          if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Failed to upload release asset (tagName=$TAG_NAME, reason=release_not_found)"
+            exit 1
+          fi
 
-          ./gradlew publish -PversionOverride="$version_override"
+          cp "$JAR_PATH" "$RELEASE_ASSET_PATH"
+
+          gh release upload "$TAG_NAME" "$RELEASE_ASSET_PATH" --clobber
