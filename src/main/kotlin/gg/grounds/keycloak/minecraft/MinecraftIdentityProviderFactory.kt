@@ -4,6 +4,7 @@ import gg.grounds.keycloak.minecraft.api.SharedApiClient
 import org.jboss.logging.Logger
 import org.keycloak.Config
 import org.keycloak.broker.provider.AbstractIdentityProviderFactory
+import org.keycloak.broker.social.SocialIdentityProviderFactory
 import org.keycloak.models.IdentityProviderModel
 import org.keycloak.models.KeycloakSession
 import org.keycloak.provider.ProviderConfigProperty
@@ -24,7 +25,8 @@ import org.keycloak.provider.ProviderConfigurationBuilder
  * Admin UI values always take precedence over these server-level defaults.
  */
 class MinecraftIdentityProviderFactory :
-    AbstractIdentityProviderFactory<MinecraftIdentityProvider>() {
+    AbstractIdentityProviderFactory<MinecraftIdentityProvider>(),
+    SocialIdentityProviderFactory<MinecraftIdentityProvider> {
 
     private var spiClientId: String? = null
     private var spiClientSecret: String? = null

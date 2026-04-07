@@ -85,10 +85,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
                     when (val pemObject = parser.readObject()) {
                         is PEMKeyPair -> pemKeyConverter.getPrivateKey(pemObject.privateKeyInfo)
                         is PrivateKeyInfo -> pemKeyConverter.getPrivateKey(pemObject)
-                        else ->
-                            throw IllegalArgumentException(
-                                "Unsupported PEM format for partner XSTS private key"
-                            )
+                        else -> throw IllegalArgumentException(UNSUPPORTED_PEM_FORMAT_MESSAGE)
                     }
                 }
 
@@ -108,10 +105,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
                         PKCS8_BEGIN_MARKER to PKCS8_END_MARKER
                     normalizedLineBreaks.contains(PKCS1_BEGIN_MARKER) ->
                         PKCS1_BEGIN_MARKER to PKCS1_END_MARKER
-                    else ->
-                        throw IllegalArgumentException(
-                            "Unsupported PEM format for partner XSTS private key"
-                        )
+                    else -> throw IllegalArgumentException(UNSUPPORTED_PEM_FORMAT_MESSAGE)
                 }
 
             val body =
@@ -120,7 +114,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
                     .substringBefore(markers.second)
                     .replace(Regex("\\s"), "")
 
-            require(body.isNotBlank()) { "Unsupported PEM format for partner XSTS private key" }
+            require(body.isNotBlank()) { UNSUPPORTED_PEM_FORMAT_MESSAGE }
 
             return buildString {
                 appendLine(markers.first)
@@ -150,6 +144,8 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
         private const val PKCS8_END_MARKER = "-----END PRIVATE KEY-----"
         private const val PKCS1_BEGIN_MARKER = "-----BEGIN RSA PRIVATE KEY-----"
         private const val PKCS1_END_MARKER = "-----END RSA PRIVATE KEY-----"
+        private const val UNSUPPORTED_PEM_FORMAT_MESSAGE =
+            "Unsupported PEM format for partner XSTS private key"
     }
 }
 

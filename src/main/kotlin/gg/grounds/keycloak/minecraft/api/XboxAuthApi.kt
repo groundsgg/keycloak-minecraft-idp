@@ -12,6 +12,14 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
+private const val APPLICATION_JSON = "application/json"
+private const val MINECRAFT_RELYING_PARTY = "rp://api.minecraftservices.com/"
+private const val XBOX_USER_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
+private const val XBOX_XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
+
+// Shared, thread-safe after configuration
+private val objectMapper: ObjectMapper = ObjectMapper()
+
 /** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
 interface XboxAuthClient {
     fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthApi.XboxAuthResponse
@@ -25,109 +33,8 @@ interface XboxAuthClient {
 }
 
 /** Handles Xbox Live authentication to obtain Xbox User Token and XSTS Token. */
-class XboxAuthApi : XboxAuthClient {
-
-    /**
-     * Authenticates with Xbox Live using a Microsoft access token. Returns an XboxAuthResponse
-     * containing the Xbox User Token and user hash.
-     */
-    override fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthResponse {
-        val requestBody =
-            mapOf(
-                "Properties" to
-                    mapOf(
-                        "AuthMethod" to "RPS",
-                        "SiteName" to "user.auth.xboxlive.com",
-                        "RpsTicket" to "d=$microsoftAccessToken",
-                    ),
-                // Microsoft Learn's Xbox user-auth example uses this exact relying-party value:
-                // https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/live-website-authentication
-                // The `http://` scheme is part of the protocol identifier, not a transport URL to
-                // upgrade.
-                "RelyingParty" to "http://auth.xboxlive.com",
-                "TokenType" to "JWT",
-            )
-
-        val request =
-            HttpRequest.newBuilder()
-                .uri(URI.create(XBOX_USER_AUTH_URL))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .timeout(Duration.ofSeconds(30))
-                .POST(
-                    HttpRequest.BodyPublishers.ofString(
-                        objectMapper.writeValueAsString(requestBody)
-                    )
-                )
-                .build()
-
-        val response =
-            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-
-        if (response.statusCode() != 200) {
-            throw IOException("Xbox authentication failed with status: ${response.statusCode()}")
-        }
-
-        return objectMapper.readValue(response.body(), XboxAuthResponse::class.java)
-    }
-
-    /**
-     * Obtains an XSTS token scoped to Minecraft services. Throws XboxAuthException for known Xbox
-     * Live error codes.
-     */
-    override fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthResponse =
-        obtainXstsToken(xboxUserToken, "rp://api.minecraftservices.com/")
-
-    override fun obtainPartnerXstsToken(
-        xboxUserToken: String,
-        relyingParty: String,
-    ): XboxAuthResponse = obtainXstsToken(xboxUserToken, relyingParty)
-
-    private fun obtainXstsToken(xboxUserToken: String, relyingParty: String): XboxAuthResponse {
-        val requestBody =
-            mapOf(
-                "Properties" to
-                    mapOf("SandboxId" to "RETAIL", "UserTokens" to listOf(xboxUserToken)),
-                "RelyingParty" to relyingParty,
-                "TokenType" to "JWT",
-            )
-
-        val request =
-            HttpRequest.newBuilder()
-                .uri(URI.create(XBOX_XSTS_AUTH_URL))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .timeout(Duration.ofSeconds(30))
-                .POST(
-                    HttpRequest.BodyPublishers.ofString(
-                        objectMapper.writeValueAsString(requestBody)
-                    )
-                )
-                .build()
-
-        val response =
-            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-
-        if (response.statusCode() != 200) {
-            if (response.statusCode() == 401) {
-                try {
-                    val error =
-                        objectMapper.readValue(response.body(), XstsErrorResponse::class.java)
-                    throw XboxAuthException(error.xErr, error.message, error.redirect)
-                } catch (e: JsonProcessingException) {
-                    throw IOException(
-                        "XSTS authentication failed with status 401, body: ${response.body()}",
-                        e,
-                    )
-                }
-            }
-
-            throw IOException("XSTS token request failed with status: ${response.statusCode()}")
-        }
-
-        return objectMapper.readValue(response.body(), XboxAuthResponse::class.java)
-    }
-
+class XboxAuthApi(private val delegate: XboxAuthClient = DefaultXboxAuthClient()) :
+    XboxAuthClient by delegate {
     // --- Response types ---
     // @JsonCreator on the primary constructor lets Jackson use it unambiguously without
     // requiring jackson-module-kotlin (and the ~4 MB kotlin-reflect it pulls in).
@@ -187,11 +94,114 @@ class XboxAuthApi : XboxAuthClient {
         @param:JsonProperty("Message") val message: String?,
         @param:JsonProperty("Redirect") val redirect: String?,
     )
+}
 
-    companion object {
-        private const val XBOX_USER_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
-        private const val XBOX_XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
-        // Shared, thread-safe after configuration
-        internal val objectMapper: ObjectMapper = ObjectMapper()
+private class DefaultXboxAuthClient : XboxAuthClient {
+
+    /**
+     * Authenticates with Xbox Live using a Microsoft access token. Returns an XboxAuthResponse
+     * containing the Xbox User Token and user hash.
+     */
+    override fun authenticateWithXbox(microsoftAccessToken: String): XboxAuthApi.XboxAuthResponse {
+        val requestBody =
+            mapOf(
+                "Properties" to
+                    mapOf(
+                        "AuthMethod" to "RPS",
+                        "SiteName" to "user.auth.xboxlive.com",
+                        "RpsTicket" to "d=$microsoftAccessToken",
+                    ),
+                // Microsoft Learn's Xbox user-auth example uses this exact relying-party value:
+                // https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/live-website-authentication
+                // The `http://` scheme is part of the protocol identifier, not a transport URL to
+                // upgrade.
+                "RelyingParty" to "http://auth.xboxlive.com",
+                "TokenType" to "JWT",
+            )
+
+        val request =
+            HttpRequest.newBuilder()
+                .uri(URI.create(XBOX_USER_AUTH_URL))
+                .header("Content-Type", APPLICATION_JSON)
+                .header("Accept", APPLICATION_JSON)
+                .timeout(Duration.ofSeconds(30))
+                .POST(
+                    HttpRequest.BodyPublishers.ofString(
+                        objectMapper.writeValueAsString(requestBody)
+                    )
+                )
+                .build()
+
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+        if (response.statusCode() != 200) {
+            throw IOException("Xbox authentication failed with status: ${response.statusCode()}")
+        }
+
+        return objectMapper.readValue(response.body(), XboxAuthApi.XboxAuthResponse::class.java)
+    }
+
+    /**
+     * Obtains an XSTS token scoped to Minecraft services. Throws XboxAuthException for known Xbox
+     * Live error codes.
+     */
+    override fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse =
+        obtainXstsToken(xboxUserToken, MINECRAFT_RELYING_PARTY)
+
+    override fun obtainPartnerXstsToken(
+        xboxUserToken: String,
+        relyingParty: String,
+    ): XboxAuthApi.XboxAuthResponse = obtainXstsToken(xboxUserToken, relyingParty)
+
+    private fun obtainXstsToken(
+        xboxUserToken: String,
+        relyingParty: String,
+    ): XboxAuthApi.XboxAuthResponse {
+        val requestBody =
+            mapOf(
+                "Properties" to
+                    mapOf("SandboxId" to "RETAIL", "UserTokens" to listOf(xboxUserToken)),
+                "RelyingParty" to relyingParty,
+                "TokenType" to "JWT",
+            )
+
+        val request =
+            HttpRequest.newBuilder()
+                .uri(URI.create(XBOX_XSTS_AUTH_URL))
+                .header("Content-Type", APPLICATION_JSON)
+                .header("Accept", APPLICATION_JSON)
+                .timeout(Duration.ofSeconds(30))
+                .POST(
+                    HttpRequest.BodyPublishers.ofString(
+                        objectMapper.writeValueAsString(requestBody)
+                    )
+                )
+                .build()
+
+        val response =
+            SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+        if (response.statusCode() != 200) {
+            if (response.statusCode() == 401) {
+                try {
+                    val error =
+                        objectMapper.readValue(
+                            response.body(),
+                            XboxAuthApi.XstsErrorResponse::class.java,
+                        )
+                    throw XboxAuthException(error.xErr, error.message, error.redirect)
+                } catch (e: JsonProcessingException) {
+                    throw IOException(
+                        "XSTS authentication failed with status 401, body: ${response.body()}",
+                        e,
+                    )
+                }
+            }
+
+            throw IOException("XSTS token request failed with status: ${response.statusCode()}")
+        }
+
+        return objectMapper.readValue(response.body(), XboxAuthApi.XboxAuthResponse::class.java)
     }
 }

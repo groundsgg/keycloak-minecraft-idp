@@ -3,6 +3,7 @@ package gg.grounds.keycloak.minecraft.identity
 import gg.grounds.keycloak.minecraft.MinecraftIdentityProvider
 import gg.grounds.keycloak.minecraft.api.MinecraftApi
 import gg.grounds.keycloak.minecraft.api.MinecraftClient
+import gg.grounds.keycloak.minecraft.api.XboxAuthApi
 import gg.grounds.keycloak.minecraft.api.XboxAuthClient
 import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
@@ -37,187 +38,24 @@ class MinecraftIdentityResolver(
 ) {
     fun resolve(accessToken: String): ResolvedMinecraftIdentity {
         try {
-            val xboxResponse =
-                try {
-                    xboxAuthClient.authenticateWithXbox(accessToken)
-                } catch (e: XboxAuthException) {
-                    throw e
-                } catch (e: IOException) {
-                    throw XboxAuthenticationFailureException("authenticate_with_xbox", e)
-                }
-
-            val minecraftXstsResponse =
-                try {
-                    xboxAuthClient.obtainMinecraftXstsToken(xboxResponse.token)
-                } catch (e: XboxAuthException) {
-                    logger.warnf(
-                        e,
-                        "Requested Minecraft XSTS token failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
-                        MinecraftIdentityProvider.PROVIDER_ID,
-                        e.errorCode,
-                        e.message ?: e.javaClass.simpleName,
-                        e.rawMessage,
-                        e.redirectUrl,
-                    )
-                    throw IdentityBrokerException(e.message, e)
-                } catch (e: IOException) {
-                    throw XboxAuthenticationFailureException("obtain_minecraft_xsts_token", e)
-                }
-
-            val partnerXstsResponse =
-                try {
-                    xboxAuthClient.obtainPartnerXstsToken(xboxResponse.token, partnerRelyingParty)
-                } catch (e: XboxAuthException) {
-                    logger.warnf(
-                        e,
-                        "Requested partner XSTS token failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
-                        MinecraftIdentityProvider.PROVIDER_ID,
-                        e.errorCode,
-                        e.message ?: e.javaClass.simpleName,
-                        e.rawMessage,
-                        e.redirectUrl,
-                    )
-                    throw IdentityBrokerException(e.message, e)
-                } catch (e: IOException) {
-                    throw XboxAuthenticationFailureException("obtain_partner_xsts_token", e)
-                }
-
-            val userHash =
-                minecraftXstsResponse.userHash
-                    ?: throw IdentityBrokerException("XSTS response did not return a user hash")
-            val directXboxGamertag = minecraftXstsResponse.gamertag ?: partnerXstsResponse.gamertag
-            var partnerTokenInspection: PartnerXstsTokenInspection? = null
-
-            fun inspectPartnerToken(
-                requiredClaim: String,
-                failOnError: Boolean,
-            ): PartnerXstsTokenInspection? {
-                partnerTokenInspection?.let {
-                    return it
-                }
-
-                return try {
-                    partnerTokenInspector.inspect(partnerXstsResponse.token).also { inspection ->
-                        partnerTokenInspection = inspection
-                        if (
-                            partnerXstsResponse.partnerXboxUserId == null &&
-                                inspection.partnerXboxUserId != null
-                        ) {
-                            logger.info(
-                                "Resolved partner XSTS token successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, relyingParty=$partnerRelyingParty, claimSource=encrypted_token, outerAlg=${inspection.outerHeader.algorithm}, outerEnc=${inspection.outerHeader.encryption}, outerZip=${inspection.outerHeader.compression})"
-                            )
-                        }
-                    }
-                } catch (e: Exception) {
-                    val outerHeader =
-                        PartnerXstsTokenInspector.readOuterHeader(partnerXstsResponse.token)
-                    logger.warnf(
-                        e,
-                        "Inspected partner XSTS token failed (provider=%s, relyingParty=%s, requiredClaim=%s, outerAlg=%s, outerEnc=%s, outerZip=%s, x5t=%s)",
-                        MinecraftIdentityProvider.PROVIDER_ID,
-                        partnerRelyingParty,
-                        requiredClaim,
-                        outerHeader.algorithm,
-                        outerHeader.encryption,
-                        outerHeader.compression,
-                        outerHeader.thumbprint,
-                    )
-                    if (failOnError) {
-                        throw IdentityBrokerException(
-                            "Xbox partner token decryption failed. Verify `partnerXstsPrivateKey` for the configured relying party.",
-                            e,
-                        )
-                    }
-                    null
-                }
-            }
-
-            val partnerXboxUserId =
-                partnerXstsResponse.partnerXboxUserId
-                    ?: inspectPartnerToken("ptx", failOnError = true)?.partnerXboxUserId
-                    ?: run {
-                        val inspection =
-                            partnerTokenInspection
-                                ?: PartnerXstsTokenInspection(
-                                    outerHeader =
-                                        PartnerXstsTokenInspector.readOuterHeader(
-                                            partnerXstsResponse.token
-                                        ),
-                                    decryptionConfigured = false,
-                                )
-                        logger.warnf(
-                            "Resolved partner XSTS token without ptx (provider=%s, relyingParty=%s, displayClaimKeys=%s, decryptionConfigured=%s, decrypted=%s, decryptedTopLevelClaimKeys=%s, decryptedXuiClaimKeys=%s, outerAlg=%s, outerEnc=%s, outerZip=%s, x5t=%s)",
-                            MinecraftIdentityProvider.PROVIDER_ID,
-                            partnerRelyingParty,
-                            partnerXstsResponse.displayClaimKeys.joinToString(","),
-                            inspection.decryptionConfigured,
-                            inspection.decrypted,
-                            inspection.topLevelClaimKeys.joinToString(","),
-                            inspection.xuiClaimKeys.joinToString(","),
-                            inspection.outerHeader.algorithm,
-                            inspection.outerHeader.encryption,
-                            inspection.outerHeader.compression,
-                            inspection.outerHeader.thumbprint,
-                        )
-                        throw IdentityBrokerException(
-                            "Xbox partner token did not return ptx claim. Verify the partner relying party configuration or configure `partnerXstsPrivateKey` for encrypted partner tokens."
-                        )
-                    }
-            val stableBrokerUserId = resolveStableBrokerUserId(partnerXboxUserId)
-
+            val xboxResponse = authenticateWithXbox(accessToken)
+            val minecraftXstsResponse = obtainMinecraftXstsToken(xboxResponse.token)
+            val partnerXstsResponse = obtainPartnerXstsToken(xboxResponse.token)
+            val partnerTokenState = PartnerTokenState()
+            val stableBrokerUserId =
+                resolveStableBrokerUserId(
+                    resolvePartnerXboxUserId(partnerXstsResponse, partnerTokenState)
+                )
             val minecraftToken =
-                minecraftClient
-                    .authenticateWithMinecraft(userHash, minecraftXstsResponse.token)
-                    .accessToken
+                authenticateWithMinecraft(
+                    requireUserHash(minecraftXstsResponse),
+                    minecraftXstsResponse.token,
+                )
             val ownership = minecraftClient.getOwnership(minecraftToken)
             val xboxGamertag =
-                directXboxGamertag ?: inspectPartnerToken("gtg", failOnError = false)?.gamertag
+                resolveXboxGamertag(minecraftXstsResponse, partnerXstsResponse, partnerTokenState)
 
-            if (ownership.ownsJavaEdition) {
-                return try {
-                    val profile = minecraftClient.getProfile(minecraftToken)
-                    logger.info(
-                        "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=java)"
-                    )
-                    ResolvedMinecraftIdentity(
-                        brokerUserId = stableBrokerUserId,
-                        username = profile.name,
-                        loginIdentity = "java",
-                        ownership = ownership,
-                        minecraftJavaUuid = profile.formattedUuid,
-                        minecraftJavaUsername = profile.name,
-                        xboxGamertag = xboxGamertag,
-                    )
-                } catch (e: MinecraftProfileNotFoundException) {
-                    if (ownership.ownsBedrockEdition) {
-                        logger.warnf(
-                            e,
-                            "Resolved Minecraft Java profile missing; falling back to Bedrock identity (provider=%s)",
-                            MinecraftIdentityProvider.PROVIDER_ID,
-                        )
-                        resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
-                    } else {
-                        logger.warnf(
-                            e,
-                            "Resolved Minecraft identity failed (provider=%s, edition=java, reason=%s)",
-                            MinecraftIdentityProvider.PROVIDER_ID,
-                            e.message ?: e.javaClass.simpleName,
-                        )
-                        throw IdentityBrokerException(
-                            "Your account has Minecraft Java Edition but no Java profile exists yet. " +
-                                "Please log into the Minecraft Launcher once to set up your profile."
-                        )
-                    }
-                }
-            }
-
-            if (ownership.ownsBedrockEdition) {
-                return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
-            }
-
-            throw IdentityBrokerException(
-                "This Microsoft account does not have a Minecraft Java or Bedrock entitlement."
-            )
+            return resolveOwnedIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
         } catch (e: XboxAuthException) {
             logger.warnf(
                 e,
@@ -257,6 +95,237 @@ class MinecraftIdentityResolver(
         }
     }
 
+    private fun authenticateWithXbox(accessToken: String): XboxAuthApi.XboxAuthResponse =
+        try {
+            xboxAuthClient.authenticateWithXbox(accessToken)
+        } catch (e: XboxAuthException) {
+            throw e
+        } catch (e: IOException) {
+            throw XboxAuthenticationFailureException("authenticate_with_xbox", e)
+        }
+
+    private fun obtainMinecraftXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse =
+        try {
+            xboxAuthClient.obtainMinecraftXstsToken(xboxUserToken)
+        } catch (e: XboxAuthException) {
+            logger.warnf(
+                e,
+                "Requested Minecraft XSTS token failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
+                MinecraftIdentityProvider.PROVIDER_ID,
+                e.errorCode,
+                e.message ?: e.javaClass.simpleName,
+                e.rawMessage,
+                e.redirectUrl,
+            )
+            throw IdentityBrokerException(e.message, e)
+        } catch (e: IOException) {
+            throw XboxAuthenticationFailureException("obtain_minecraft_xsts_token", e)
+        }
+
+    private fun obtainPartnerXstsToken(xboxUserToken: String): XboxAuthApi.XboxAuthResponse =
+        try {
+            xboxAuthClient.obtainPartnerXstsToken(xboxUserToken, partnerRelyingParty)
+        } catch (e: XboxAuthException) {
+            logger.warnf(
+                e,
+                "Requested partner XSTS token failed (provider=%s, xerr=%d, reason=%s, rawMessage=%s, redirect=%s)",
+                MinecraftIdentityProvider.PROVIDER_ID,
+                e.errorCode,
+                e.message ?: e.javaClass.simpleName,
+                e.rawMessage,
+                e.redirectUrl,
+            )
+            throw IdentityBrokerException(e.message, e)
+        } catch (e: IOException) {
+            throw XboxAuthenticationFailureException("obtain_partner_xsts_token", e)
+        }
+
+    private fun requireUserHash(minecraftXstsResponse: XboxAuthApi.XboxAuthResponse): String =
+        minecraftXstsResponse.userHash
+            ?: throw IdentityBrokerException("XSTS response did not return a user hash")
+
+    private fun authenticateWithMinecraft(userHash: String, xstsToken: String): String =
+        minecraftClient.authenticateWithMinecraft(userHash, xstsToken).accessToken
+
+    private fun resolvePartnerXboxUserId(
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerTokenState: PartnerTokenState,
+    ): String =
+        partnerXstsResponse.partnerXboxUserId
+            ?: inspectPartnerToken(
+                    partnerXstsResponse,
+                    requiredClaim = "ptx",
+                    failOnError = true,
+                    partnerTokenState = partnerTokenState,
+                )
+                ?.partnerXboxUserId
+            ?: throwMissingPartnerXboxUserId(partnerXstsResponse, partnerTokenState)
+
+    private fun resolveXboxGamertag(
+        minecraftXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerTokenState: PartnerTokenState,
+    ): String? {
+        val directXboxGamertag = minecraftXstsResponse.gamertag ?: partnerXstsResponse.gamertag
+        return directXboxGamertag
+            ?: inspectPartnerToken(
+                    partnerXstsResponse,
+                    requiredClaim = "gtg",
+                    failOnError = false,
+                    partnerTokenState = partnerTokenState,
+                )
+                ?.gamertag
+    }
+
+    private fun inspectPartnerToken(
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        requiredClaim: String,
+        failOnError: Boolean,
+        partnerTokenState: PartnerTokenState,
+    ): PartnerXstsTokenInspection? {
+        partnerTokenState.inspection?.let {
+            return it
+        }
+
+        return try {
+            partnerTokenInspector.inspect(partnerXstsResponse.token).also { inspection ->
+                partnerTokenState.inspection = inspection
+                logResolvedPartnerToken(inspection, partnerXstsResponse)
+            }
+        } catch (e: Exception) {
+            handlePartnerTokenInspectionFailure(e, partnerXstsResponse, requiredClaim, failOnError)
+        }
+    }
+
+    private fun logResolvedPartnerToken(
+        inspection: PartnerXstsTokenInspection,
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+    ) {
+        if (partnerXstsResponse.partnerXboxUserId == null && inspection.partnerXboxUserId != null) {
+            logger.info(
+                "Resolved partner XSTS token successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, relyingParty=$partnerRelyingParty, claimSource=encrypted_token, outerAlg=${inspection.outerHeader.algorithm}, outerEnc=${inspection.outerHeader.encryption}, outerZip=${inspection.outerHeader.compression})"
+            )
+        }
+    }
+
+    private fun handlePartnerTokenInspectionFailure(
+        exception: Exception,
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        requiredClaim: String,
+        failOnError: Boolean,
+    ): PartnerXstsTokenInspection? {
+        val outerHeader = PartnerXstsTokenInspector.readOuterHeader(partnerXstsResponse.token)
+        logger.warnf(
+            exception,
+            "Inspected partner XSTS token failed (provider=%s, relyingParty=%s, requiredClaim=%s, outerAlg=%s, outerEnc=%s, outerZip=%s, x5t=%s)",
+            MinecraftIdentityProvider.PROVIDER_ID,
+            partnerRelyingParty,
+            requiredClaim,
+            outerHeader.algorithm,
+            outerHeader.encryption,
+            outerHeader.compression,
+            outerHeader.thumbprint,
+        )
+        if (failOnError) {
+            throw IdentityBrokerException(
+                "Xbox partner token decryption failed. Verify `partnerXstsPrivateKey` for the configured relying party.",
+                exception,
+            )
+        }
+        return null
+    }
+
+    private fun throwMissingPartnerXboxUserId(
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerTokenState: PartnerTokenState,
+    ): Nothing {
+        val inspection = partnerTokenState.currentInspection(partnerXstsResponse.token)
+        logger.warnf(
+            "Resolved partner XSTS token without ptx (provider=%s, relyingParty=%s, displayClaimKeys=%s, decryptionConfigured=%s, decrypted=%s, decryptedTopLevelClaimKeys=%s, decryptedXuiClaimKeys=%s, outerAlg=%s, outerEnc=%s, outerZip=%s, x5t=%s)",
+            MinecraftIdentityProvider.PROVIDER_ID,
+            partnerRelyingParty,
+            partnerXstsResponse.displayClaimKeys.joinToString(","),
+            inspection.decryptionConfigured,
+            inspection.decrypted,
+            inspection.topLevelClaimKeys.joinToString(","),
+            inspection.xuiClaimKeys.joinToString(","),
+            inspection.outerHeader.algorithm,
+            inspection.outerHeader.encryption,
+            inspection.outerHeader.compression,
+            inspection.outerHeader.thumbprint,
+        )
+        throw IdentityBrokerException(
+            "Xbox partner token did not return ptx claim. Verify the partner relying party configuration or configure `partnerXstsPrivateKey` for encrypted partner tokens."
+        )
+    }
+
+    private fun resolveOwnedIdentity(
+        stableBrokerUserId: String,
+        xboxGamertag: String?,
+        ownership: MinecraftApi.Ownership,
+        minecraftToken: String,
+    ): ResolvedMinecraftIdentity {
+        if (ownership.ownsJavaEdition) {
+            return resolveJavaIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
+        }
+        if (ownership.ownsBedrockEdition) {
+            return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
+        }
+        throw IdentityBrokerException(
+            "This Microsoft account does not have a Minecraft Java or Bedrock entitlement."
+        )
+    }
+
+    private fun resolveJavaIdentity(
+        stableBrokerUserId: String,
+        xboxGamertag: String?,
+        ownership: MinecraftApi.Ownership,
+        minecraftToken: String,
+    ): ResolvedMinecraftIdentity =
+        try {
+            val profile = minecraftClient.getProfile(minecraftToken)
+            logger.info(
+                "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=java)"
+            )
+            ResolvedMinecraftIdentity(
+                brokerUserId = stableBrokerUserId,
+                username = profile.name,
+                loginIdentity = "java",
+                ownership = ownership,
+                minecraftJavaUuid = profile.formattedUuid,
+                minecraftJavaUsername = profile.name,
+                xboxGamertag = xboxGamertag,
+            )
+        } catch (e: MinecraftProfileNotFoundException) {
+            handleMissingJavaProfile(e, stableBrokerUserId, xboxGamertag, ownership)
+        }
+
+    private fun handleMissingJavaProfile(
+        exception: MinecraftProfileNotFoundException,
+        stableBrokerUserId: String,
+        xboxGamertag: String?,
+        ownership: MinecraftApi.Ownership,
+    ): ResolvedMinecraftIdentity {
+        if (ownership.ownsBedrockEdition) {
+            logger.warnf(
+                exception,
+                "Resolved Minecraft Java profile missing; falling back to Bedrock identity (provider=%s)",
+                MinecraftIdentityProvider.PROVIDER_ID,
+            )
+            return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
+        }
+
+        logger.warnf(
+            exception,
+            "Resolved Minecraft identity failed (provider=%s, edition=java, reason=%s)",
+            MinecraftIdentityProvider.PROVIDER_ID,
+            exception.message ?: exception.javaClass.simpleName,
+        )
+        throw IdentityBrokerException(
+            "Your account has Minecraft Java Edition but no Java profile exists yet. Please log into the Minecraft Launcher once to set up your profile."
+        )
+    }
+
     /**
      * Builds the Bedrock-side identity when Java identity is unavailable or Bedrock is the only
      * owned edition.
@@ -289,6 +358,15 @@ class MinecraftIdentityResolver(
      */
     private fun resolveStableBrokerUserId(partnerXboxUserId: String): String =
         "xboxptx-$partnerXboxUserId"
+
+    private data class PartnerTokenState(var inspection: PartnerXstsTokenInspection? = null) {
+        fun currentInspection(token: String): PartnerXstsTokenInspection =
+            inspection
+                ?: PartnerXstsTokenInspection(
+                    outerHeader = PartnerXstsTokenInspector.readOuterHeader(token),
+                    decryptionConfigured = false,
+                )
+    }
 
     companion object {
         private val logger = Logger.getLogger(MinecraftIdentityResolver::class.java)
