@@ -41,8 +41,8 @@ class MinecraftApi : MinecraftClient {
         val request =
             HttpRequest.newBuilder()
                 .uri(URI.create(MINECRAFT_AUTH_URL))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
+                .header("Content-Type", APPLICATION_JSON)
+                .header("Accept", APPLICATION_JSON)
                 .timeout(Duration.ofSeconds(30))
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
@@ -69,7 +69,7 @@ class MinecraftApi : MinecraftClient {
             HttpRequest.newBuilder()
                 .uri(URI.create(MINECRAFT_LICENSES_URL))
                 .header("Authorization", "Bearer $minecraftAccessToken")
-                .header("Accept", "application/json")
+                .header("Accept", APPLICATION_JSON)
                 .timeout(Duration.ofSeconds(30))
                 .GET()
                 .build()
@@ -105,7 +105,7 @@ class MinecraftApi : MinecraftClient {
             HttpRequest.newBuilder()
                 .uri(URI.create(MINECRAFT_PROFILE_URL))
                 .header("Authorization", "Bearer $minecraftAccessToken")
-                .header("Accept", "application/json")
+                .header("Accept", APPLICATION_JSON)
                 .timeout(Duration.ofSeconds(30))
                 .GET()
                 .build()
@@ -201,6 +201,7 @@ class MinecraftApi : MinecraftClient {
         private val logger = Logger.getLogger(MinecraftApi::class.java)
         // Shared, thread-safe after configuration
         internal val objectMapper: ObjectMapper = ObjectMapper()
+        private const val APPLICATION_JSON = "application/json"
         private const val MINECRAFT_AUTH_URL =
             "https://api.minecraftservices.com/authentication/login_with_xbox"
         private const val MINECRAFT_LICENSES_URL =

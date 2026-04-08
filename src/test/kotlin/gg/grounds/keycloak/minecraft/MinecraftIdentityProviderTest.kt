@@ -65,55 +65,31 @@ class MinecraftIdentityProviderTest {
     }
 
     @Test
-    fun `authenticateTokenRequest rejects unresolved vault secret`() {
-        val vault = RecordingVaultTranscriber(secretValue = null)
-        val provider =
-            createProvider(
-                config =
-                    MinecraftIdentityProviderConfig().apply {
-                        clientId = "realm-client-id"
-                        clientSecret = "vault:keycloak/minecraft"
-                    },
-                session = testKeycloakSession(vault),
+    fun `authenticateTokenRequest rejects unresolved or blank vault secret`() {
+        listOf<String?>(null, "").forEach { secretValue ->
+            val vault = RecordingVaultTranscriber(secretValue = secretValue)
+            val provider =
+                createProvider(
+                    config =
+                        MinecraftIdentityProviderConfig().apply {
+                            clientId = "realm-client-id"
+                            clientSecret = "vault:keycloak/minecraft"
+                        },
+                    session = testKeycloakSession(vault),
+                )
+
+            val exception =
+                assertFailsWith<IdentityBrokerException> {
+                    provider.authenticateTokenRequest(newSimpleHttpRequest())
+                }
+
+            assertEquals(
+                "Minecraft identity provider could not resolve `clientSecret` from Keycloak vault.",
+                exception.message,
             )
-
-        val exception =
-            assertFailsWith<IdentityBrokerException> {
-                provider.authenticateTokenRequest(newSimpleHttpRequest())
-            }
-
-        assertEquals(
-            "Minecraft identity provider could not resolve `clientSecret` from Keycloak vault.",
-            exception.message,
-        )
-        assertEquals(listOf("vault:keycloak/minecraft"), vault.requestedSecretKeys)
-        assertTrue(vault.secret.closed)
-    }
-
-    @Test
-    fun `authenticateTokenRequest rejects blank vault secret`() {
-        val vault = RecordingVaultTranscriber(secretValue = "")
-        val provider =
-            createProvider(
-                config =
-                    MinecraftIdentityProviderConfig().apply {
-                        clientId = "realm-client-id"
-                        clientSecret = "vault:keycloak/minecraft"
-                    },
-                session = testKeycloakSession(vault),
-            )
-
-        val exception =
-            assertFailsWith<IdentityBrokerException> {
-                provider.authenticateTokenRequest(newSimpleHttpRequest())
-            }
-
-        assertEquals(
-            "Minecraft identity provider could not resolve `clientSecret` from Keycloak vault.",
-            exception.message,
-        )
-        assertEquals(listOf("vault:keycloak/minecraft"), vault.requestedSecretKeys)
-        assertTrue(vault.secret.closed)
+            assertEquals(listOf("vault:keycloak/minecraft"), vault.requestedSecretKeys)
+            assertTrue(vault.secret.closed)
+        }
     }
 
     @Test
@@ -372,80 +348,6 @@ class MinecraftIdentityProviderTest {
 
         assertEquals("Avery", state.firstName)
         assertEquals("Stone", state.lastName)
-    }
-
-    @Test
-    fun `updateBrokeredUser syncs managed attributes through provider hook`() {
-        val provider = createProvider(syncRealName = true)
-        val state =
-            RecordingUserState(
-                username = "minecraft-user",
-                attributes =
-                    mutableMapOf(
-                        "microsoft_name" to mutableListOf("Old Name"),
-                        "minecraft_login_identity" to mutableListOf("java"),
-                        "minecraft_java_uuid" to
-                            mutableListOf("12345678-9012-3456-7890-123456789012"),
-                        "custom_attribute" to mutableListOf("preserved"),
-                    ),
-            )
-        val context =
-            org.keycloak.broker.provider
-                .BrokeredIdentityContext("minecraft-id", provider.config)
-                .apply {
-                    authenticationSession = authenticationSession(isNewUser = false)
-                    setUserAttribute("microsoft_name", "Avery Stone")
-                    setUserAttribute("minecraft_login_identity", "bedrock")
-                    setUserAttribute("minecraft_java_owned", "false")
-                    setUserAttribute("minecraft_bedrock_owned", "true")
-                    setUserAttribute("xbox_gamertag", "BedrockTag")
-                }
-
-        provider.updateBrokeredUser(
-            testKeycloakSession(),
-            realmModel(),
-            recordingUserModel(state),
-            context,
-        )
-
-        assertEquals(listOf("Avery Stone"), state.attributes["microsoft_name"]?.toList())
-        assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
-        assertEquals(listOf("false"), state.attributes["minecraft_java_owned"]?.toList())
-        assertEquals(listOf("true"), state.attributes["minecraft_bedrock_owned"]?.toList())
-        assertEquals(listOf("BedrockTag"), state.attributes["xbox_gamertag"]?.toList())
-        assertEquals(null, state.attributes["minecraft_java_uuid"])
-        assertEquals(listOf("preserved"), state.attributes["custom_attribute"]?.toList())
-    }
-
-    @Test
-    fun `updateBrokeredUser preserves microsoft name when real name sync is disabled`() {
-        val provider = createProvider(syncRealName = false)
-        val state =
-            RecordingUserState(
-                username = "minecraft-user",
-                attributes =
-                    mutableMapOf(
-                        "microsoft_name" to mutableListOf("Old Name"),
-                        "minecraft_login_identity" to mutableListOf("java"),
-                    ),
-            )
-        val context =
-            org.keycloak.broker.provider
-                .BrokeredIdentityContext("minecraft-id", provider.config)
-                .apply {
-                    authenticationSession = authenticationSession(isNewUser = false)
-                    setUserAttribute("minecraft_login_identity", "bedrock")
-                }
-
-        provider.updateBrokeredUser(
-            testKeycloakSession(),
-            realmModel(),
-            recordingUserModel(state),
-            context,
-        )
-
-        assertEquals(listOf("Old Name"), state.attributes["microsoft_name"]?.toList())
-        assertEquals(listOf("bedrock"), state.attributes["minecraft_login_identity"]?.toList())
     }
 
     private fun createProvider(

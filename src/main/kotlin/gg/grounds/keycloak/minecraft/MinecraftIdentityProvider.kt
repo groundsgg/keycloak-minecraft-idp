@@ -14,6 +14,7 @@ import org.jboss.logging.Logger
 import org.keycloak.broker.oidc.AbstractOAuth2IdentityProvider
 import org.keycloak.broker.provider.BrokeredIdentityContext
 import org.keycloak.broker.provider.IdentityBrokerException
+import org.keycloak.broker.social.SocialIdentityProvider
 import org.keycloak.events.EventBuilder
 import org.keycloak.http.simple.SimpleHttpRequest
 import org.keycloak.jose.jws.JWSInput
@@ -40,7 +41,9 @@ class MinecraftIdentityProvider(
         MinecraftIdentityContextFactory(config),
     private val userSynchronizer: MinecraftBrokeredUserSynchronizer =
         MinecraftBrokeredUserSynchronizer(config),
-) : AbstractOAuth2IdentityProvider<MinecraftIdentityProviderConfig>(session, config) {
+) :
+    AbstractOAuth2IdentityProvider<MinecraftIdentityProviderConfig>(session, config),
+    SocialIdentityProvider<MinecraftIdentityProviderConfig> {
 
     constructor(
         session: KeycloakSession,
