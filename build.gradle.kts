@@ -17,7 +17,7 @@ repositories { mavenCentral() }
 
 kotlin { jvmToolchain(21) }
 
-val keycloakVersion = "26.5.7"
+val keycloakVersion = "26.6.0"
 
 dependencies {
     compileOnly(platform("org.keycloak:keycloak-parent:$keycloakVersion"))
