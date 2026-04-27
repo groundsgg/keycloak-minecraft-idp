@@ -1,7 +1,7 @@
 import org.gradle.api.publish.maven.MavenPublication
 
 plugins {
-    kotlin("jvm") version "2.3.20"
+    kotlin("jvm") version "2.3.21"
     id("com.diffplug.spotless") version "8.4.0"
     id("com.gradleup.shadow") version "9.4.1"
     `maven-publish`
