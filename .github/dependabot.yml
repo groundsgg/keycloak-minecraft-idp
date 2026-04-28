@@ -7,6 +7,8 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "fix"
     groups:
       keycloak:
         patterns:
@@ -23,3 +25,5 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
