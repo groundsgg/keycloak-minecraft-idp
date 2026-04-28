@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.0.2...v1.0.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* **deps:** bump jvm from 2.3.20 to 2.3.21 ([#19](https://github.com/groundsgg/keycloak-minecraft-idp/issues/19)) ([ad336fa](https://github.com/groundsgg/keycloak-minecraft-idp/commit/ad336fa3a306df96f2413e58896ecfd6eb9dc11a))
+* **deps:** bump org.keycloak:keycloak-parent in the keycloak group ([#17](https://github.com/groundsgg/keycloak-minecraft-idp/issues/17)) ([4b3e8b2](https://github.com/groundsgg/keycloak-minecraft-idp/commit/4b3e8b204523a089eb11702106edf02d7e44b7b8))
+
 ## [1.0.2](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.0.1...v1.0.2) (2026-04-22)
 
 
