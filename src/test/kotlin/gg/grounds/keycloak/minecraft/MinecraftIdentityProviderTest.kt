@@ -2,11 +2,15 @@ package gg.grounds.keycloak.minecraft
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.keycloak.minecraft.api.MinecraftApi
+import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftServiceUnavailableException
+import gg.grounds.keycloak.minecraft.sync.MinecraftBrokeredAttributes
 import gg.grounds.keycloak.minecraft.testsupport.FakeMinecraftClient
 import gg.grounds.keycloak.minecraft.testsupport.FakeXboxAuthClient
 import gg.grounds.keycloak.minecraft.testsupport.RecordingUserState
 import gg.grounds.keycloak.minecraft.testsupport.RecordingVaultTranscriber
 import gg.grounds.keycloak.minecraft.testsupport.authenticationSession
+import gg.grounds.keycloak.minecraft.testsupport.federatedLoginSession
+import gg.grounds.keycloak.minecraft.testsupport.invokeDoGetFederatedIdentity
 import gg.grounds.keycloak.minecraft.testsupport.invokeExtractIdentityFromProfile
 import gg.grounds.keycloak.minecraft.testsupport.newSimpleHttpRequest
 import gg.grounds.keycloak.minecraft.testsupport.realmModel
@@ -21,6 +25,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.keycloak.broker.provider.IdentityBrokerException
 import org.keycloak.models.IdentityProviderModel
+import org.keycloak.models.UserModel
 
 class MinecraftIdentityProviderTest {
 
@@ -348,6 +353,104 @@ class MinecraftIdentityProviderTest {
 
         assertEquals("Avery", state.firstName)
         assertEquals("Stone", state.lastName)
+    }
+
+    @Test
+    fun `degraded login reuses the existing user when Minecraft services are unavailable`() {
+        val state =
+            RecordingUserState(
+                username = "GroundsSteve",
+                attributes =
+                    mutableMapOf(
+                        MinecraftBrokeredAttributes.JAVA_UUID to
+                            mutableListOf("12345678-9012-3456-7890-123456789012"),
+                        MinecraftBrokeredAttributes.JAVA_USERNAME to mutableListOf("GroundsSteve"),
+                        MinecraftBrokeredAttributes.JAVA_OWNED to mutableListOf("true"),
+                        MinecraftBrokeredAttributes.BEDROCK_OWNED to mutableListOf("false"),
+                        MinecraftBrokeredAttributes.LOGIN_IDENTITY to mutableListOf("java"),
+                        MinecraftBrokeredAttributes.XBOX_GAMERTAG to mutableListOf("GroundsTag"),
+                    ),
+            )
+
+        val context =
+            invokeDoGetFederatedIdentity(
+                degradedProvider(recordingUserModel(state)),
+                "ms-access-token",
+            )
+
+        // Matched to the existing user via the partner XUID, and the stored Minecraft attributes
+        // are carried so the synchronizer doesn't wipe them. (Keycloak lowercases brokered
+        // usernames, so username casing isn't asserted here.)
+        assertEquals("xboxptx-partner-123", context.id)
+        assertEquals(
+            "12345678-9012-3456-7890-123456789012",
+            context.getUserAttribute(MinecraftBrokeredAttributes.JAVA_UUID),
+        )
+        assertEquals(
+            "GroundsSteve",
+            context.getUserAttribute(MinecraftBrokeredAttributes.JAVA_USERNAME),
+        )
+        assertEquals(
+            "GroundsTag",
+            context.getUserAttribute(MinecraftBrokeredAttributes.XBOX_GAMERTAG),
+        )
+        assertEquals("true", context.getUserAttribute(MinecraftBrokeredAttributes.JAVA_OWNED))
+    }
+
+    @Test
+    fun `degraded login fails for a first-time user when Minecraft services are unavailable`() {
+        assertFailsWith<IdentityBrokerException> {
+            invokeDoGetFederatedIdentity(degradedProvider(existingUser = null), "ms-access-token")
+        }
+    }
+
+    private fun degradedProvider(existingUser: UserModel?): MinecraftIdentityProvider {
+        val config =
+            MinecraftIdentityProviderConfig().apply {
+                isEnabled = true
+                alias = "minecraft"
+                clientId = "minecraft-client-id"
+                clientSecret = "minecraft-client-secret"
+                partnerRelyingParty = "https://grounds.example.com"
+            }
+        val xboxAuthClient =
+            FakeXboxAuthClient(
+                authenticateHandler = {
+                    xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                },
+                minecraftXstsHandler = {
+                    xboxResponse(
+                        token = "xsts-token",
+                        userHash = "xsts-uhs",
+                        gamertag = "GroundsTag",
+                    )
+                },
+                partnerXstsHandler = { _, _ ->
+                    xboxResponse(
+                        token = "partner-xsts-token",
+                        userHash = null,
+                        gamertag = "GroundsTag",
+                        partnerXboxUserId = "partner-123",
+                    )
+                },
+            )
+        val minecraftClient =
+            FakeMinecraftClient(
+                authenticateHandler = { _, _ ->
+                    throw MinecraftServiceUnavailableException(
+                        "Minecraft authentication failed with status: 503",
+                        503,
+                    )
+                },
+                ownershipHandler = { error("ownership must not be called during a 5xx outage") },
+                profileHandler = { error("profile must not be called during a 5xx outage") },
+            )
+        return MinecraftIdentityProvider(
+            federatedLoginSession(existingUser),
+            config,
+            xboxAuthClient,
+            minecraftClient,
+        )
     }
 
     private fun createProvider(

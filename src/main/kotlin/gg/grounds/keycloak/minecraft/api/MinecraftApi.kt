@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException
+import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftServiceUnavailableException
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpRequest
@@ -55,9 +56,7 @@ class MinecraftApi : MinecraftClient {
             SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            throw IOException(
-                "Minecraft authentication failed with status: ${response.statusCode()}"
-            )
+            throw failForStatus("Minecraft authentication", response.statusCode())
         }
 
         return objectMapper.readValue(response.body(), MinecraftAuthResponse::class.java)
@@ -78,7 +77,7 @@ class MinecraftApi : MinecraftClient {
             SharedApiClient.httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) {
-            throw IOException("Entitlements check failed with status: ${response.statusCode()}")
+            throw failForStatus("Entitlements check", response.statusCode())
         }
 
         val entitlements = objectMapper.readValue(response.body(), EntitlementsResponse::class.java)
@@ -120,13 +119,26 @@ class MinecraftApi : MinecraftClient {
         }
 
         if (response.statusCode() != 200) {
-            throw IOException(
-                "Minecraft profile request failed with status: ${response.statusCode()}"
-            )
+            throw failForStatus("Minecraft profile request", response.statusCode())
         }
 
         return objectMapper.readValue(response.body(), MinecraftProfile::class.java)
     }
+
+    /**
+     * Maps a non-200 Minecraft Services status to an exception: 5xx / 429 (the upstream is
+     * unavailable, not the request) → a retryable [MinecraftServiceUnavailableException] that lets
+     * callers degrade gracefully; everything else → a plain [IOException].
+     */
+    private fun failForStatus(operation: String, statusCode: Int): IOException =
+        if (statusCode >= 500 || statusCode == 429) {
+            MinecraftServiceUnavailableException(
+                "$operation failed with status: $statusCode",
+                statusCode,
+            )
+        } else {
+            IOException("$operation failed with status: $statusCode")
+        }
 
     // --- Response types ---
     // @JsonCreator on the primary constructor lets Jackson use it unambiguously without
