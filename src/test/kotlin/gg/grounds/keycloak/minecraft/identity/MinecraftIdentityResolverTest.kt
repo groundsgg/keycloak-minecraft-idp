@@ -2,6 +2,7 @@ package gg.grounds.keycloak.minecraft.identity
 
 import gg.grounds.keycloak.minecraft.api.MinecraftApi
 import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException
+import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftServiceUnavailableException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthenticationFailureException
 import gg.grounds.keycloak.minecraft.testsupport.FakeMinecraftClient
@@ -885,6 +886,80 @@ class MinecraftIdentityResolverTest {
         assertEquals("xboxptx-partner-pasted", identity.brokerUserId)
         assertEquals("PastedTag", identity.xboxGamertag)
     }
+
+    @Test
+    fun `signals degraded login when Minecraft services are unavailable`() {
+        val xboxAuthClient = partnerXboxAuthClient(partnerXboxUserId = "partner-281467")
+        val minecraftClient =
+            FakeMinecraftClient(
+                authenticateHandler = { _, _ ->
+                    throw MinecraftServiceUnavailableException(
+                        "Minecraft authentication failed with status: 503",
+                        503,
+                    )
+                },
+                ownershipHandler = { error("ownership must not be called when auth 5xx") },
+                profileHandler = { error("profile must not be called when auth 5xx") },
+            )
+
+        val error =
+            assertFailsWith<MinecraftServicesDegradedException> {
+                MinecraftIdentityResolver(
+                        xboxAuthClient,
+                        minecraftClient,
+                        "https://grounds.example.com",
+                    )
+                    .resolve("ms-access-token")
+            }
+
+        // Broker id comes from the partner XSTS (resolved before the failing MC call), so the
+        // provider can match a returning user offline.
+        assertEquals("xboxptx-partner-281467", error.stableBrokerUserId)
+    }
+
+    @Test
+    fun `does not degrade on a Minecraft client error`() {
+        val xboxAuthClient = partnerXboxAuthClient(partnerXboxUserId = "partner-281467")
+        val minecraftClient =
+            FakeMinecraftClient(
+                authenticateHandler = { _, _ ->
+                    // 4xx is a real auth failure (plain IOException), not a transient outage.
+                    throw IOException("Minecraft authentication failed with status: 401")
+                },
+                ownershipHandler = { error("ownership must not be called") },
+                profileHandler = { error("profile must not be called") },
+            )
+
+        val error =
+            assertFailsWith<IdentityBrokerException> {
+                MinecraftIdentityResolver(
+                        xboxAuthClient,
+                        minecraftClient,
+                        "https://grounds.example.com",
+                    )
+                    .resolve("ms-access-token")
+            }
+
+        assertFalse(error is MinecraftServicesDegradedException)
+    }
+
+    private fun partnerXboxAuthClient(partnerXboxUserId: String): FakeXboxAuthClient =
+        FakeXboxAuthClient(
+            authenticateHandler = {
+                xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+            },
+            minecraftXstsHandler = {
+                xboxResponse(token = "xsts-token", userHash = "xsts-uhs", gamertag = "GroundsTag")
+            },
+            partnerXstsHandler = { _, _ ->
+                xboxResponse(
+                    token = "partner-xsts-token",
+                    userHash = null,
+                    gamertag = "GroundsTag",
+                    partnerXboxUserId = partnerXboxUserId,
+                )
+            },
+        )
 
     private fun unusedMinecraftClient(): FakeMinecraftClient =
         FakeMinecraftClient(

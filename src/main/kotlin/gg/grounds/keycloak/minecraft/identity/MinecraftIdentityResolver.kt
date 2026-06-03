@@ -6,6 +6,7 @@ import gg.grounds.keycloak.minecraft.api.MinecraftClient
 import gg.grounds.keycloak.minecraft.api.XboxAuthApi
 import gg.grounds.keycloak.minecraft.api.XboxAuthClient
 import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftProfileNotFoundException
+import gg.grounds.keycloak.minecraft.api.exceptions.MinecraftServiceUnavailableException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthenticationFailureException
 import java.io.IOException
@@ -46,16 +47,36 @@ class MinecraftIdentityResolver(
                 resolveStableBrokerUserId(
                     resolvePartnerXboxUserId(partnerXstsResponse, partnerTokenState)
                 )
-            val minecraftToken =
-                authenticateWithMinecraft(
-                    requireUserHash(minecraftXstsResponse),
-                    minecraftXstsResponse.token,
-                )
-            val ownership = minecraftClient.getOwnership(minecraftToken)
-            val xboxGamertag =
-                resolveXboxGamertag(minecraftXstsResponse, partnerXstsResponse, partnerTokenState)
+            // The stable broker id above comes from the (validated) partner XSTS token and does NOT
+            // depend on Minecraft Services. So if the Minecraft Services calls below fail with a
+            // transient 5xx/429, we still know *who* this is — surface that via
+            // MinecraftServicesDegradedException so the provider can fall back to the existing
+            // federated user for a returning login instead of failing the whole flow.
+            return try {
+                val minecraftToken =
+                    authenticateWithMinecraft(
+                        requireUserHash(minecraftXstsResponse),
+                        minecraftXstsResponse.token,
+                    )
+                val ownership = minecraftClient.getOwnership(minecraftToken)
+                val xboxGamertag =
+                    resolveXboxGamertag(
+                        minecraftXstsResponse,
+                        partnerXstsResponse,
+                        partnerTokenState,
+                    )
 
-            return resolveOwnedIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
+                resolveOwnedIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
+            } catch (e: MinecraftServiceUnavailableException) {
+                logger.warnf(
+                    e,
+                    "Minecraft services unavailable (provider=%s, status=%d, brokerUserId=%s) — signalling degraded login so a returning user can still authenticate",
+                    MinecraftIdentityProvider.PROVIDER_ID,
+                    e.statusCode,
+                    stableBrokerUserId,
+                )
+                throw MinecraftServicesDegradedException(stableBrokerUserId, e)
+            }
         } catch (e: XboxAuthException) {
             logger.warnf(
                 e,

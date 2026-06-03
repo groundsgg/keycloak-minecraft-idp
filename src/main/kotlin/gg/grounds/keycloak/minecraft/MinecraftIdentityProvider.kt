@@ -1,9 +1,12 @@
 package gg.grounds.keycloak.minecraft
 
 import com.fasterxml.jackson.databind.JsonNode
+import gg.grounds.keycloak.minecraft.api.MinecraftApi
 import gg.grounds.keycloak.minecraft.identity.MinecraftIdentityContextFactory
 import gg.grounds.keycloak.minecraft.identity.MinecraftIdentityResolver
+import gg.grounds.keycloak.minecraft.identity.MinecraftServicesDegradedException
 import gg.grounds.keycloak.minecraft.identity.PartnerXstsTokenInspector
+import gg.grounds.keycloak.minecraft.identity.ResolvedMinecraftIdentity
 import gg.grounds.keycloak.minecraft.sync.MinecraftBrokeredAttributes
 import gg.grounds.keycloak.minecraft.sync.MinecraftBrokeredUserSynchronizer
 import java.io.IOException
@@ -19,6 +22,7 @@ import org.keycloak.events.EventBuilder
 import org.keycloak.http.simple.SimpleHttpRequest
 import org.keycloak.jose.jws.JWSInput
 import org.keycloak.jose.jws.JWSInputException
+import org.keycloak.models.FederatedIdentityModel
 import org.keycloak.models.KeycloakSession
 import org.keycloak.models.RealmModel
 import org.keycloak.models.UserModel
@@ -103,7 +107,89 @@ class MinecraftIdentityProvider(
     }
 
     override fun doGetFederatedIdentity(accessToken: String): BrokeredIdentityContext {
-        return identityContextFactory.create(identityResolver.resolve(accessToken))
+        return try {
+            identityContextFactory.create(identityResolver.resolve(accessToken))
+        } catch (e: MinecraftServicesDegradedException) {
+            degradedFederatedIdentity(e.stableBrokerUserId, e)
+        }
+    }
+
+    /**
+     * Fallback used when Minecraft Services is down (5xx) but the user's stable broker id was
+     * already resolved from the validated partner XSTS token.
+     *
+     * For a **returning** user we already have a federated link (keyed on that broker id) plus the
+     * Minecraft attributes we stored on the last successful login — so we rebuild an equivalent
+     * brokered context from those and let them in without touching Minecraft Services. Rebuilding
+     * the full identity (rather than a bare context) matters: the synchronizer removes managed
+     * attributes that are absent from the context, so a partial context would wipe the stored
+     * Minecraft data.
+     *
+     * A **first-time** login can't be completed offline (ownership/UUID are only resolvable via
+     * Minecraft Services), so with no existing user we fail cleanly with a retry message.
+     */
+    private fun degradedFederatedIdentity(
+        brokerUserId: String,
+        cause: Exception,
+    ): BrokeredIdentityContext {
+        val realm = session.context.realm
+        val existing =
+            session
+                .users()
+                .getUserByFederatedIdentity(
+                    realm,
+                    FederatedIdentityModel(config.alias, brokerUserId, brokerUserId),
+                )
+                ?: run {
+                    logger.warnf(
+                        cause,
+                        "Minecraft services unavailable and no existing federated user for brokerUserId=%s (provider=%s) — a first login cannot be verified offline, failing",
+                        brokerUserId,
+                        PROVIDER_ID,
+                    )
+                    throw IdentityBrokerException(
+                        "Minecraft login is temporarily unavailable. Please try again shortly.",
+                        cause,
+                    )
+                }
+        logger.warnf(
+            "Minecraft services unavailable (provider=%s) — degraded login for returning user %s (brokerUserId=%s) using stored attributes",
+            PROVIDER_ID,
+            existing.username,
+            brokerUserId,
+        )
+        return identityContextFactory.create(rebuildIdentityFrom(brokerUserId, existing))
+    }
+
+    /** Reconstructs the resolved identity from the attributes stored on a returning user. */
+    private fun rebuildIdentityFrom(
+        brokerUserId: String,
+        user: UserModel,
+    ): ResolvedMinecraftIdentity {
+        val javaUsername = user.getFirstAttribute(MinecraftBrokeredAttributes.JAVA_USERNAME)
+        val gamertag = user.getFirstAttribute(MinecraftBrokeredAttributes.XBOX_GAMERTAG)
+        return ResolvedMinecraftIdentity(
+            brokerUserId = brokerUserId,
+            username = javaUsername ?: gamertag ?: user.username,
+            loginIdentity =
+                user.getFirstAttribute(MinecraftBrokeredAttributes.LOGIN_IDENTITY) ?: brokerUserId,
+            ownership =
+                MinecraftApi.Ownership(
+                    // Entitlement names aren't persisted (only the owned flags are); the context
+                    // factory uses the flags, not this set, so an empty set is correct here.
+                    entitlementNames = emptySet(),
+                    ownsJavaEdition =
+                        user.getFirstAttribute(MinecraftBrokeredAttributes.JAVA_OWNED)?.toBoolean()
+                            ?: false,
+                    ownsBedrockEdition =
+                        user
+                            .getFirstAttribute(MinecraftBrokeredAttributes.BEDROCK_OWNED)
+                            ?.toBoolean() ?: false,
+                ),
+            minecraftJavaUuid = user.getFirstAttribute(MinecraftBrokeredAttributes.JAVA_UUID),
+            minecraftJavaUsername = javaUsername,
+            xboxGamertag = gamertag,
+        )
     }
 
     private fun BrokeredIdentityContext.applyMicrosoftProfile(idTokenClaims: JsonNode) {

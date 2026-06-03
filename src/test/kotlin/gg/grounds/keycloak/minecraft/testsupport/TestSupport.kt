@@ -28,9 +28,11 @@ import org.keycloak.broker.provider.AbstractIdentityProvider
 import org.keycloak.broker.provider.BrokeredIdentityContext
 import org.keycloak.events.EventBuilder
 import org.keycloak.http.simple.SimpleHttpRequest
+import org.keycloak.models.KeycloakContext
 import org.keycloak.models.KeycloakSession
 import org.keycloak.models.RealmModel
 import org.keycloak.models.UserModel
+import org.keycloak.models.UserProvider
 import org.keycloak.sessions.AuthenticationSessionModel
 import org.keycloak.vault.VaultCharSecret
 import org.keycloak.vault.VaultRawSecret
@@ -147,6 +149,7 @@ internal fun recordingUserModel(state: RecordingUserState): UserModel =
                 null
             }
             "getAttributes" -> state.attributes
+            "getFirstAttribute" -> state.attributes[args?.get(0) as String]?.firstOrNull()
             "toString" -> "RecordingUserModel"
             "hashCode" -> 0
             "equals" -> false
@@ -357,4 +360,62 @@ private class UnsupportedVaultTranscriber : VaultTranscriber {
 
     override fun getStringSecret(key: String): VaultStringSecret =
         throw UnsupportedOperationException("Vault access is not expected in these tests")
+}
+
+/**
+ * A session whose `users().getUserByFederatedIdentity(...)` returns [existingUser] (or null) and
+ * whose context exposes a realm — enough to exercise the provider's degraded-login fallback.
+ */
+internal fun federatedLoginSession(existingUser: UserModel?): KeycloakSession {
+    val realm = realmModel()
+    val users =
+        Proxy.newProxyInstance(
+            UserProvider::class.java.classLoader,
+            arrayOf(UserProvider::class.java),
+        ) { _, method, _ ->
+            when (method.name) {
+                "getUserByFederatedIdentity" -> existingUser
+                "close" -> null
+                "toString" -> "FakeUserProvider"
+                "hashCode" -> 0
+                "equals" -> false
+                else ->
+                    throw UnsupportedOperationException(
+                        "Unexpected UserProvider method invoked during test (method=${method.name})"
+                    )
+            }
+        } as UserProvider
+    val context =
+        Proxy.newProxyInstance(
+            KeycloakContext::class.java.classLoader,
+            arrayOf(KeycloakContext::class.java),
+        ) { _, method, _ ->
+            when (method.name) {
+                "getRealm" -> realm
+                "toString" -> "FakeKeycloakContext"
+                "hashCode" -> 0
+                "equals" -> false
+                else ->
+                    throw UnsupportedOperationException(
+                        "Unexpected KeycloakContext method invoked during test (method=${method.name})"
+                    )
+            }
+        } as KeycloakContext
+    return Proxy.newProxyInstance(
+        KeycloakSession::class.java.classLoader,
+        arrayOf(KeycloakSession::class.java),
+    ) { _, method, _ ->
+        when (method.name) {
+            "users" -> users
+            "getContext" -> context
+            "vault" -> UnsupportedVaultTranscriber()
+            "toString" -> "FakeFederatedLoginSession"
+            "hashCode" -> 0
+            "equals" -> false
+            else ->
+                throw UnsupportedOperationException(
+                    "Unexpected KeycloakSession method invoked during test (method=${method.name})"
+                )
+        }
+    } as KeycloakSession
 }
