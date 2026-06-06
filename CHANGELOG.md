@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.1.0...v1.1.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* update keycloak and jvm plugin deps ([#30](https://github.com/groundsgg/keycloak-minecraft-idp/issues/30)) ([b15b493](https://github.com/groundsgg/keycloak-minecraft-idp/commit/b15b493d3ab9000cd5430ca82f23ccbb370de189))
+
 ## [1.1.0](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.0.3...v1.1.0) (2026-06-03)
 
 
