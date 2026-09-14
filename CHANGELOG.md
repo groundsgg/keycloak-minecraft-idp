@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.5](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.1.4...v1.1.5) (2026-09-14)
+
+
+### Bug Fixes
+
+* bump com.diffplug.spotless from 8.9.0 to 8.10.2 ([#60](https://github.com/groundsgg/keycloak-minecraft-idp/issues/60)) ([b3c818a](https://github.com/groundsgg/keycloak-minecraft-idp/commit/b3c818a03c3af40b428f79c354d707a97aff75a4))
+* bump gradle-wrapper from 9.7.0 to 9.7.1 ([#55](https://github.com/groundsgg/keycloak-minecraft-idp/issues/55)) ([cbba95f](https://github.com/groundsgg/keycloak-minecraft-idp/commit/cbba95ff771cd23db53b3142482e70ffb35e2e8c))
+* bump jvm from 2.4.10 to 2.4.20 ([#58](https://github.com/groundsgg/keycloak-minecraft-idp/issues/58)) ([7658e9f](https://github.com/groundsgg/keycloak-minecraft-idp/commit/7658e9f9fd6dc2bc0e5f401b90282217cfc7122f))
+* bump org.bouncycastle:bcpkix-jdk18on from 1.85 to 1.86 ([#59](https://github.com/groundsgg/keycloak-minecraft-idp/issues/59)) ([bdb05bc](https://github.com/groundsgg/keycloak-minecraft-idp/commit/bdb05bc1c07fcb26d33e9b5431a4df1ffaffb55c))
+* bump org.keycloak:keycloak-parent in the keycloak group ([#53](https://github.com/groundsgg/keycloak-minecraft-idp/issues/53)) ([f2ec57e](https://github.com/groundsgg/keycloak-minecraft-idp/commit/f2ec57e92dd52d328b44237686c0fee7d973ad83))
+
 ## [1.1.4](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.1.3...v1.1.4) (2026-08-23)
 
 
