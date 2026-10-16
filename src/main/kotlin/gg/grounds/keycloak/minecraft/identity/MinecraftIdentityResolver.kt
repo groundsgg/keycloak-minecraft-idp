@@ -45,7 +45,7 @@ class MinecraftIdentityResolver(
             val partnerTokenState = PartnerTokenState()
             val stableBrokerUserId =
                 resolveStableBrokerUserId(
-                    resolvePartnerXboxUserId(partnerXstsResponse, partnerTokenState)
+                    resolvePartnerXboxUserId(partnerXstsResponse, partnerTokenState),
                 )
             // The stable broker id above comes from the (validated) partner XSTS token and does NOT
             // depend on Minecraft Services. So if the Minecraft Services calls below fail with a
@@ -224,7 +224,7 @@ class MinecraftIdentityResolver(
     ) {
         if (partnerXstsResponse.partnerXboxUserId == null && inspection.partnerXboxUserId != null) {
             logger.info(
-                "Resolved partner XSTS token successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, relyingParty=$partnerRelyingParty, claimSource=encrypted_token, outerAlg=${inspection.outerHeader.algorithm}, outerEnc=${inspection.outerHeader.encryption}, outerZip=${inspection.outerHeader.compression})"
+                "Resolved partner XSTS token successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, relyingParty=$partnerRelyingParty, claimSource=encrypted_token, outerAlg=${inspection.outerHeader.algorithm}, outerEnc=${inspection.outerHeader.encryption}, outerZip=${inspection.outerHeader.compression})",
             )
         }
     }
@@ -276,7 +276,7 @@ class MinecraftIdentityResolver(
             inspection.outerHeader.thumbprint,
         )
         throw IdentityBrokerException(
-            "Xbox partner token did not return ptx claim. Verify the partner relying party configuration or configure `partnerXstsPrivateKey` for encrypted partner tokens."
+            "Xbox partner token did not return ptx claim. Verify the partner relying party configuration or configure `partnerXstsPrivateKey` for encrypted partner tokens.",
         )
     }
 
@@ -293,7 +293,7 @@ class MinecraftIdentityResolver(
             return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
         }
         throw IdentityBrokerException(
-            "This Microsoft account does not have a Minecraft Java or Bedrock entitlement."
+            "This Microsoft account does not have a Minecraft Java or Bedrock entitlement.",
         )
     }
 
@@ -306,7 +306,7 @@ class MinecraftIdentityResolver(
         try {
             val profile = minecraftClient.getProfile(minecraftToken)
             logger.info(
-                "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=java)"
+                "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=java)",
             )
             ResolvedMinecraftIdentity(
                 brokerUserId = stableBrokerUserId,
@@ -343,7 +343,7 @@ class MinecraftIdentityResolver(
             exception.message ?: exception.javaClass.simpleName,
         )
         throw IdentityBrokerException(
-            "Your account has Minecraft Java Edition but no Java profile exists yet. Please log into the Minecraft Launcher once to set up your profile."
+            "Your account has Minecraft Java Edition but no Java profile exists yet. Please log into the Minecraft Launcher once to set up your profile.",
         )
     }
 
@@ -361,7 +361,7 @@ class MinecraftIdentityResolver(
         }
 
         logger.info(
-            "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=bedrock)"
+            "Resolved Minecraft identity successfully (provider=${MinecraftIdentityProvider.PROVIDER_ID}, edition=bedrock)",
         )
 
         return ResolvedMinecraftIdentity(

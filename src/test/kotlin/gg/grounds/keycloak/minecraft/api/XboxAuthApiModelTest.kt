@@ -42,8 +42,8 @@ class XboxAuthApiModelTest {
                                     uhs = "xsts-uhs",
                                     gtg = "GroundsTag",
                                     ptx = "partner-123",
-                                )
-                            )
+                                ),
+                            ),
                     ),
             )
 

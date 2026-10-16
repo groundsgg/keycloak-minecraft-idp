@@ -91,7 +91,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
 
             return key as? RSAPrivateKey
                 ?: throw IllegalArgumentException(
-                    "Unsupported private key type for partner XSTS token decryption"
+                    "Unsupported private key type for partner XSTS token decryption",
                 )
         }
 

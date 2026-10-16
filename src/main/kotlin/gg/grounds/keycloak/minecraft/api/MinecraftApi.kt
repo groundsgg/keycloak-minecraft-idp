@@ -47,8 +47,8 @@ class MinecraftApi : MinecraftClient {
                 .timeout(Duration.ofSeconds(30))
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        objectMapper.writeValueAsString(requestBody)
-                    )
+                        objectMapper.writeValueAsString(requestBody),
+                    ),
                 )
                 .build()
 
@@ -114,7 +114,7 @@ class MinecraftApi : MinecraftClient {
 
         if (response.statusCode() == 404) {
             throw MinecraftProfileNotFoundException(
-                "The user has no Minecraft Java Edition profile"
+                "The user has no Minecraft Java Edition profile",
             )
         }
 

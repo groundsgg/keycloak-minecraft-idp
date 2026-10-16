@@ -14,7 +14,7 @@ class MinecraftIdentityContextFactoryTest {
                 isEnabled = true
                 clientId = "minecraft-client-id"
                 clientSecret = "minecraft-client-secret"
-            }
+            },
         )
 
     @Test
@@ -34,7 +34,7 @@ class MinecraftIdentityContextFactoryTest {
                     minecraftJavaUuid = "12345678-9012-3456-7890-123456789012",
                     minecraftJavaUsername = "GroundsSteve",
                     xboxGamertag = "GroundsTag",
-                )
+                ),
             )
 
         assertEquals("xboxptx-partner-123", context.id)
@@ -66,7 +66,7 @@ class MinecraftIdentityContextFactoryTest {
                             ownsBedrockEdition = true,
                         ),
                     xboxGamertag = "BedrockTag",
-                )
+                ),
             )
 
         assertEquals("xboxptx-partner-123", context.id)

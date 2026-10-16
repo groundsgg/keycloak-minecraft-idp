@@ -123,7 +123,7 @@ class MinecraftIdentityProviderTest {
                         clientId = "realm-client-id"
                         clientSecret = "realm-client-secret"
                         clientAuthMethod = "client_secret_basic"
-                    }
+                    },
             )
 
         val exception =
@@ -147,7 +147,7 @@ class MinecraftIdentityProviderTest {
                     MinecraftIdentityProviderConfig().apply {
                         clientId = ""
                         clientSecret = "realm-client-secret"
-                    }
+                    },
             )
 
         val exception =
@@ -169,7 +169,7 @@ class MinecraftIdentityProviderTest {
                     MinecraftIdentityProviderConfig().apply {
                         clientId = "realm-client-id"
                         clientSecret = ""
-                    }
+                    },
             )
 
         val exception =
@@ -332,7 +332,7 @@ class MinecraftIdentityProviderTest {
                         clientId = "minecraft-client-id"
                         clientSecret = "minecraft-client-secret"
                         syncRealName = true
-                    }
+                    },
             )
         val state = RecordingUserState(username = "minecraft-user")
         val context =
@@ -542,7 +542,7 @@ class MinecraftIdentityProviderTest {
                 }
                 """
                     .trimIndent()
-                    .toByteArray()
+                    .toByteArray(),
             )
         val signature = encoder.encodeToString("signature".toByteArray())
         return "$header.$payload.$signature"

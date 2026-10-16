@@ -127,8 +127,8 @@ private class DefaultXboxAuthClient : XboxAuthClient {
                 .timeout(Duration.ofSeconds(30))
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        objectMapper.writeValueAsString(requestBody)
-                    )
+                        objectMapper.writeValueAsString(requestBody),
+                    ),
                 )
                 .build()
 
@@ -174,8 +174,8 @@ private class DefaultXboxAuthClient : XboxAuthClient {
                 .timeout(Duration.ofSeconds(30))
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        objectMapper.writeValueAsString(requestBody)
-                    )
+                        objectMapper.writeValueAsString(requestBody),
+                    ),
                 )
                 .build()
 
