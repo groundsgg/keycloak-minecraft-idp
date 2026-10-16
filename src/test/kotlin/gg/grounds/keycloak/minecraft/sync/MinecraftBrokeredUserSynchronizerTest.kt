@@ -18,7 +18,7 @@ class MinecraftBrokeredUserSynchronizerTest {
                 MinecraftIdentityProviderConfig().apply {
                     isEnabled = true
                     syncRealName = true
-                }
+                },
             )
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
@@ -37,7 +37,7 @@ class MinecraftBrokeredUserSynchronizerTest {
     fun `ignores names when real name sync is disabled`() {
         val synchronizer =
             MinecraftBrokeredUserSynchronizer(
-                MinecraftIdentityProviderConfig().apply { isEnabled = true }
+                MinecraftIdentityProviderConfig().apply { isEnabled = true },
             )
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
@@ -60,7 +60,7 @@ class MinecraftBrokeredUserSynchronizerTest {
                     isEnabled = true
                     syncRealName = true
                     syncMode = IdentityProviderSyncMode.IMPORT
-                }
+                },
             )
         val state =
             RecordingUserState(
@@ -88,7 +88,7 @@ class MinecraftBrokeredUserSynchronizerTest {
                     isEnabled = true
                     syncRealName = true
                     syncMode = IdentityProviderSyncMode.FORCE
-                }
+                },
             )
         val state =
             RecordingUserState(
@@ -115,7 +115,7 @@ class MinecraftBrokeredUserSynchronizerTest {
                 MinecraftIdentityProviderConfig().apply {
                     isEnabled = true
                     syncRealName = true
-                }
+                },
             )
         val state = RecordingUserState(username = "minecraft-user")
         val context = brokeredContext {
@@ -150,7 +150,7 @@ class MinecraftBrokeredUserSynchronizerTest {
                 MinecraftIdentityProviderConfig().apply {
                     isEnabled = true
                     syncRealName = true
-                }
+                },
             )
         val state =
             RecordingUserState(
@@ -192,7 +192,7 @@ class MinecraftBrokeredUserSynchronizerTest {
     fun `preserves microsoft name when real name sync is disabled`() {
         val synchronizer =
             MinecraftBrokeredUserSynchronizer(
-                MinecraftIdentityProviderConfig().apply { isEnabled = true }
+                MinecraftIdentityProviderConfig().apply { isEnabled = true },
             )
         val state =
             RecordingUserState(
@@ -215,7 +215,7 @@ class MinecraftBrokeredUserSynchronizerTest {
     }
 
     private fun brokeredContext(
-        block: BrokeredIdentityContext.() -> Unit
+        block: BrokeredIdentityContext.() -> Unit,
     ): BrokeredIdentityContext =
         BrokeredIdentityContext(
                 "minecraft-id",

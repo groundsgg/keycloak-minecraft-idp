@@ -40,7 +40,7 @@ import org.keycloak.vault.VaultStringSecret
 import org.keycloak.vault.VaultTranscriber
 
 internal fun newSimpleHttpRequest(
-    url: String = "https://login.live.com/oauth20_token.srf"
+    url: String = "https://login.live.com/oauth20_token.srf",
 ): SimpleHttpRequest {
     val simpleHttpMethodClass = Class.forName("org.keycloak.http.simple.SimpleHttpMethod")
     val postMethod =
@@ -57,7 +57,7 @@ internal fun newSimpleHttpRequest(
 }
 
 internal fun testKeycloakSession(
-    vaultTranscriber: VaultTranscriber = UnsupportedVaultTranscriber()
+    vaultTranscriber: VaultTranscriber = UnsupportedVaultTranscriber(),
 ): KeycloakSession =
     Proxy.newProxyInstance(
         KeycloakSession::class.java.classLoader,
@@ -70,7 +70,7 @@ internal fun testKeycloakSession(
             "equals" -> false
             else ->
                 throw UnsupportedOperationException(
-                    "Unexpected KeycloakSession method invoked during test (method=${method.name})"
+                    "Unexpected KeycloakSession method invoked during test (method=${method.name})",
                 )
         }
     } as KeycloakSession
@@ -92,7 +92,7 @@ internal fun authenticationSession(isNewUser: Boolean): AuthenticationSessionMod
             "equals" -> false
             else ->
                 throw UnsupportedOperationException(
-                    "Unexpected AuthenticationSessionModel method invoked during test (method=${method.name})"
+                    "Unexpected AuthenticationSessionModel method invoked during test (method=${method.name})",
                 )
         }
     } as AuthenticationSessionModel
@@ -108,7 +108,7 @@ internal fun realmModel(): RealmModel =
             "equals" -> false
             else ->
                 throw UnsupportedOperationException(
-                    "Unexpected RealmModel method invoked during test (method=${method.name})"
+                    "Unexpected RealmModel method invoked during test (method=${method.name})",
                 )
         }
     } as RealmModel
@@ -155,7 +155,7 @@ internal fun recordingUserModel(state: RecordingUserState): UserModel =
             "equals" -> false
             else ->
                 throw UnsupportedOperationException(
-                    "Unexpected UserModel method invoked during test (method=${method.name})"
+                    "Unexpected UserModel method invoked during test (method=${method.name})",
                 )
         }
     } as UserModel
@@ -208,8 +208,8 @@ internal fun xboxResponse(
                             uhs = userHash,
                             gtg = gamertag,
                             ptx = partnerXboxUserId,
-                        )
-                    )
+                        ),
+                    ),
             ),
     )
 
@@ -381,7 +381,7 @@ internal fun federatedLoginSession(existingUser: UserModel?): KeycloakSession {
                 "equals" -> false
                 else ->
                     throw UnsupportedOperationException(
-                        "Unexpected UserProvider method invoked during test (method=${method.name})"
+                        "Unexpected UserProvider method invoked during test (method=${method.name})",
                     )
             }
         } as UserProvider
@@ -397,7 +397,7 @@ internal fun federatedLoginSession(existingUser: UserModel?): KeycloakSession {
                 "equals" -> false
                 else ->
                     throw UnsupportedOperationException(
-                        "Unexpected KeycloakContext method invoked during test (method=${method.name})"
+                        "Unexpected KeycloakContext method invoked during test (method=${method.name})",
                     )
             }
         } as KeycloakContext
@@ -414,7 +414,7 @@ internal fun federatedLoginSession(existingUser: UserModel?): KeycloakSession {
             "equals" -> false
             else ->
                 throw UnsupportedOperationException(
-                    "Unexpected KeycloakSession method invoked during test (method=${method.name})"
+                    "Unexpected KeycloakSession method invoked during test (method=${method.name})",
                 )
         }
     } as KeycloakSession

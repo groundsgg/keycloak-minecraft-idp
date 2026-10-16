@@ -42,19 +42,19 @@ class MinecraftIdentityProviderFactory :
         when {
             spiClientId != null && spiClientSecret != null ->
                 logger.info(
-                    "Loaded SPI credentials successfully (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=true)"
+                    "Loaded SPI credentials successfully (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=true)",
                 )
             spiClientId != null ->
                 logger.warn(
-                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=false)"
+                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=true, clientSecretConfigured=false)",
                 )
             spiClientSecret != null ->
                 logger.warn(
-                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=true)"
+                    "Loaded SPI credentials partially (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=true)",
                 )
             else ->
                 logger.debug(
-                    "Loaded SPI credentials skipped (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=false)"
+                    "Loaded SPI credentials skipped (provider=$PROVIDER_ID, clientIdConfigured=false, clientSecretConfigured=false)",
                 )
         }
     }
@@ -70,7 +70,7 @@ class MinecraftIdentityProviderFactory :
             .label("Partner Relying Party")
             .helpText(
                 "Required Xbox partner relying party used to request a partner XSTS token " +
-                    "that returns the ptx claim for stable account linking."
+                    "that returns the ptx claim for stable account linking.",
             )
             .type(ProviderConfigProperty.STRING_TYPE)
             .add()
@@ -79,7 +79,7 @@ class MinecraftIdentityProviderFactory :
             .label("Sync Real Name")
             .helpText(
                 "Imports and stores Microsoft given and family name claims when available. " +
-                    "When disabled, first and last name are ignored."
+                    "When disabled, first and last name are ignored.",
             )
             .type(ProviderConfigProperty.BOOLEAN_TYPE)
             .defaultValue(false)
@@ -90,7 +90,7 @@ class MinecraftIdentityProviderFactory :
             .helpText(
                 "Optional private key used to decrypt encrypted partner XSTS tokens when the " +
                     "ptx claim is not exposed in DisplayClaims. Supports raw PEM, file paths, " +
-                    "or file: URIs."
+                    "or file: URIs.",
             )
             .type(ProviderConfigProperty.STRING_TYPE)
             .add()

@@ -234,7 +234,7 @@ class MinecraftIdentityProvider(
             ?: throw IdentityBrokerException(
                 "Minecraft identity provider is missing `$name`. " +
                     "Configure it in the Admin UI or via SPI " +
-                    "(KC_SPI_IDENTITY_PROVIDER_MINECRAFT_${name.toScreamingSnakeCase()})."
+                    "(KC_SPI_IDENTITY_PROVIDER_MINECRAFT_${name.toScreamingSnakeCase()}).",
             )
 
     private fun requireResolvedVaultSecret(name: String, value: String) {
@@ -247,7 +247,7 @@ class MinecraftIdentityProvider(
                 val resolvedSecret = vaultSecret.get()
                 if (resolvedSecret.filter { it.isNotBlank() }.isEmpty) {
                     throw IdentityBrokerException(
-                        "Minecraft identity provider could not resolve `$name` from Keycloak vault."
+                        "Minecraft identity provider could not resolve `$name` from Keycloak vault.",
                     )
                 }
             }
@@ -314,7 +314,7 @@ class MinecraftIdentityProvider(
                         session,
                         "partnerXstsPrivateKey",
                         config.partnerXstsPrivateKey,
-                    )
+                    ),
                 )
             } catch (e: IdentityBrokerException) {
                 throw e
@@ -358,7 +358,7 @@ class MinecraftIdentityProvider(
                             .filter { it.isNotBlank() }
                             .orElseThrow {
                                 IdentityBrokerException(
-                                    "Minecraft identity provider could not resolve `$name` from Keycloak vault."
+                                    "Minecraft identity provider could not resolve `$name` from Keycloak vault.",
                                 )
                             }
                     return resolvedSecret

@@ -80,7 +80,7 @@ class MinecraftIdentityProviderConfig(
 
         if (configuredClientAuthMethod != CLIENT_SECRET_POST) {
             throw IdentityBrokerException(
-                unsupportedClientAuthMethodMessage(configuredClientAuthMethod)
+                unsupportedClientAuthMethodMessage(configuredClientAuthMethod),
             )
         }
     }
