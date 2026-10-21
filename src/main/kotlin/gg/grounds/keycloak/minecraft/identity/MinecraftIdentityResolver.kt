@@ -65,8 +65,20 @@ class MinecraftIdentityResolver(
                         partnerXstsResponse,
                         partnerTokenState,
                     )
+                val minecraftBedrockUuid =
+                    resolveMinecraftBedrockUuid(
+                        minecraftXstsResponse,
+                        partnerXstsResponse,
+                        partnerTokenState,
+                    )
 
-                resolveOwnedIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
+                resolveOwnedIdentity(
+                    stableBrokerUserId,
+                    xboxGamertag,
+                    ownership,
+                    minecraftToken,
+                    minecraftBedrockUuid,
+                )
             } catch (e: MinecraftServiceUnavailableException) {
                 logger.warnf(
                     e,
@@ -198,6 +210,24 @@ class MinecraftIdentityResolver(
                 ?.gamertag
     }
 
+    private fun resolveMinecraftBedrockUuid(
+        minecraftXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
+        partnerTokenState: PartnerTokenState,
+    ): String? {
+        val inspectedClaims =
+            inspectPartnerToken(
+                    partnerXstsResponse,
+                    requiredClaim = "xid",
+                    failOnError = false,
+                    partnerTokenState = partnerTokenState,
+                )
+                ?.xboxUserIds ?: emptyList()
+        return XboxXuidIdentity.resolveBedrockUuid(
+            minecraftXstsResponse.xboxUserIds + partnerXstsResponse.xboxUserIds + inspectedClaims,
+        )
+    }
+
     private fun inspectPartnerToken(
         partnerXstsResponse: XboxAuthApi.XboxAuthResponse,
         requiredClaim: String,
@@ -285,12 +315,24 @@ class MinecraftIdentityResolver(
         xboxGamertag: String?,
         ownership: MinecraftApi.Ownership,
         minecraftToken: String,
+        minecraftBedrockUuid: String?,
     ): ResolvedMinecraftIdentity {
         if (ownership.ownsJavaEdition) {
-            return resolveJavaIdentity(stableBrokerUserId, xboxGamertag, ownership, minecraftToken)
+            return resolveJavaIdentity(
+                stableBrokerUserId,
+                xboxGamertag,
+                ownership,
+                minecraftToken,
+                minecraftBedrockUuid,
+            )
         }
         if (ownership.ownsBedrockEdition) {
-            return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
+            return resolveBedrockIdentity(
+                stableBrokerUserId,
+                xboxGamertag,
+                ownership,
+                minecraftBedrockUuid,
+            )
         }
         throw IdentityBrokerException(
             "This Microsoft account does not have a Minecraft Java or Bedrock entitlement.",
@@ -302,6 +344,7 @@ class MinecraftIdentityResolver(
         xboxGamertag: String?,
         ownership: MinecraftApi.Ownership,
         minecraftToken: String,
+        minecraftBedrockUuid: String?,
     ): ResolvedMinecraftIdentity =
         try {
             val profile = minecraftClient.getProfile(minecraftToken)
@@ -314,11 +357,18 @@ class MinecraftIdentityResolver(
                 loginIdentity = "java",
                 ownership = ownership,
                 minecraftJavaUuid = profile.formattedUuid,
+                minecraftBedrockUuid = minecraftBedrockUuid.takeIf { ownership.ownsBedrockEdition },
                 minecraftJavaUsername = profile.name,
                 xboxGamertag = xboxGamertag,
             )
         } catch (e: MinecraftProfileNotFoundException) {
-            handleMissingJavaProfile(e, stableBrokerUserId, xboxGamertag, ownership)
+            handleMissingJavaProfile(
+                e,
+                stableBrokerUserId,
+                xboxGamertag,
+                ownership,
+                minecraftBedrockUuid,
+            )
         }
 
     private fun handleMissingJavaProfile(
@@ -326,6 +376,7 @@ class MinecraftIdentityResolver(
         stableBrokerUserId: String,
         xboxGamertag: String?,
         ownership: MinecraftApi.Ownership,
+        minecraftBedrockUuid: String?,
     ): ResolvedMinecraftIdentity {
         if (ownership.ownsBedrockEdition) {
             logger.warnf(
@@ -333,7 +384,12 @@ class MinecraftIdentityResolver(
                 "Resolved Minecraft Java profile missing; falling back to Bedrock identity (provider=%s)",
                 MinecraftIdentityProvider.PROVIDER_ID,
             )
-            return resolveBedrockIdentity(stableBrokerUserId, xboxGamertag, ownership)
+            return resolveBedrockIdentity(
+                stableBrokerUserId,
+                xboxGamertag,
+                ownership,
+                minecraftBedrockUuid,
+            )
         }
 
         logger.warnf(
@@ -355,6 +411,7 @@ class MinecraftIdentityResolver(
         brokerUserId: String,
         xboxGamertag: String?,
         ownership: MinecraftApi.Ownership,
+        minecraftBedrockUuid: String?,
     ): ResolvedMinecraftIdentity {
         if (xboxGamertag.isNullOrBlank()) {
             throw IdentityBrokerException("Could not retrieve Xbox Gamertag for Bedrock user")
@@ -369,6 +426,7 @@ class MinecraftIdentityResolver(
             username = xboxGamertag,
             loginIdentity = "bedrock",
             ownership = ownership,
+            minecraftBedrockUuid = minecraftBedrockUuid,
             xboxGamertag = xboxGamertag,
         )
     }

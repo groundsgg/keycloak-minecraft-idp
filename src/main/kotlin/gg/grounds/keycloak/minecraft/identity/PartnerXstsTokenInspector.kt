@@ -36,6 +36,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
         return PartnerXstsTokenInspection(
             partnerXboxUserId = claims.findFirstText("ptx"),
             gamertag = claims.findFirstText("gtg"),
+            xboxUserIds = claims.findNestedValues("xui", "xid"),
             outerHeader = header,
             decryptionConfigured = true,
             decrypted = true,
@@ -152,6 +153,7 @@ class PartnerXstsTokenInspector(private val privateKey: RSAPrivateKey?) {
 internal data class PartnerXstsTokenInspection(
     val partnerXboxUserId: String? = null,
     val gamertag: String? = null,
+    val xboxUserIds: List<String> = emptyList(),
     val outerHeader: OuterHeader = OuterHeader(),
     val decryptionConfigured: Boolean,
     val decrypted: Boolean = false,
@@ -192,6 +194,30 @@ private fun JsonNode.findFirstText(fieldName: String): String? {
         }
     }
     return null
+}
+
+private fun JsonNode.findNestedValues(
+    containerName: String,
+    valueName: String,
+): List<String> = buildList {
+    if (isObject) {
+        get(containerName)?.let { container ->
+            val claims =
+                if (container.isArray) container.elements().asSequence() else sequenceOf(container)
+            claims
+                .filter { it.isObject && it.has(valueName) }
+                .forEach { add(it.get(valueName).asText()) }
+        }
+        val fields = properties().iterator()
+        while (fields.hasNext()) {
+            addAll(fields.next().value.findNestedValues(containerName, valueName))
+        }
+    } else if (isArray) {
+        val values = elements()
+        while (values.hasNext()) {
+            addAll(values.next().findNestedValues(containerName, valueName))
+        }
+    }
 }
 
 private fun JsonNode.objectFieldNames(): Set<String> =
