@@ -125,6 +125,7 @@ class MinecraftBrokeredUserSynchronizerTest {
             setUserAttribute("minecraft_java_owned", "true")
             setUserAttribute("minecraft_bedrock_owned", "false")
             setUserAttribute("minecraft_java_uuid", "12345678-9012-3456-7890-123456789012")
+            setUserAttribute("minecraft_bedrock_uuid", "00000000-0000-0000-0000-00000000002a")
             setUserAttribute("minecraft_java_username", "GroundsSteve")
             setUserAttribute("xbox_gamertag", "GroundsTag")
         }
@@ -140,6 +141,10 @@ class MinecraftBrokeredUserSynchronizerTest {
             state.attributes["minecraft_java_uuid"]?.toList(),
         )
         assertEquals(listOf("GroundsSteve"), state.attributes["minecraft_java_username"]?.toList())
+        assertEquals(
+            listOf("00000000-0000-0000-0000-00000000002a"),
+            state.attributes["minecraft_bedrock_uuid"]?.toList(),
+        )
         assertEquals(listOf("GroundsTag"), state.attributes["xbox_gamertag"]?.toList())
     }
 
@@ -164,6 +169,8 @@ class MinecraftBrokeredUserSynchronizerTest {
                         "minecraft_java_uuid" to
                             mutableListOf("12345678-9012-3456-7890-123456789012"),
                         "minecraft_java_username" to mutableListOf("GroundsSteve"),
+                        "minecraft_bedrock_uuid" to
+                            mutableListOf("00000000-0000-0000-0000-00000000002a"),
                         "xbox_gamertag" to mutableListOf("GroundsTag"),
                         "custom_attribute" to mutableListOf("preserved"),
                     ),
@@ -185,6 +192,7 @@ class MinecraftBrokeredUserSynchronizerTest {
         assertEquals(listOf("BedrockTag"), state.attributes["xbox_gamertag"]?.toList())
         assertEquals(null, state.attributes["minecraft_java_uuid"])
         assertEquals(null, state.attributes["minecraft_java_username"])
+        assertEquals(null, state.attributes["minecraft_bedrock_uuid"])
         assertEquals(listOf("preserved"), state.attributes["custom_attribute"]?.toList())
     }
 

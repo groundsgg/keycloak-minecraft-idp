@@ -12,6 +12,7 @@ data class ResolvedMinecraftIdentity(
     val loginIdentity: String,
     val ownership: MinecraftApi.Ownership,
     val minecraftJavaUuid: String? = null,
+    val minecraftBedrockUuid: String? = null,
     val minecraftJavaUsername: String? = null,
     val xboxGamertag: String? = null,
 )

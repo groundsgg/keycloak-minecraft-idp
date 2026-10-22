@@ -197,6 +197,7 @@ internal fun xboxResponse(
     userHash: String?,
     gamertag: String? = null,
     partnerXboxUserId: String? = null,
+    xboxUserId: String? = null,
 ): XboxAuthApi.XboxAuthResponse =
     XboxAuthApi.XboxAuthResponse(
         token = token,
@@ -208,6 +209,7 @@ internal fun xboxResponse(
                             uhs = userHash,
                             gtg = gamertag,
                             ptx = partnerXboxUserId,
+                            xid = xboxUserId,
                         ),
                     ),
             ),

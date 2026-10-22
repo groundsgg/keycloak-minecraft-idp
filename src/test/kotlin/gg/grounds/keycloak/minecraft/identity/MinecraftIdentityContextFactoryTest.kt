@@ -29,9 +29,10 @@ class MinecraftIdentityContextFactoryTest {
                         MinecraftApi.Ownership(
                             entitlementNames = setOf("product_minecraft"),
                             ownsJavaEdition = true,
-                            ownsBedrockEdition = false,
+                            ownsBedrockEdition = true,
                         ),
                     minecraftJavaUuid = "12345678-9012-3456-7890-123456789012",
+                    minecraftBedrockUuid = "00000000-0000-0000-0000-00000000002a",
                     minecraftJavaUsername = "GroundsSteve",
                     xboxGamertag = "GroundsTag",
                 ),
@@ -42,12 +43,16 @@ class MinecraftIdentityContextFactoryTest {
         assertEquals("groundssteve", context.username)
         assertEquals("java", context.getUserAttribute("minecraft_login_identity"))
         assertEquals("true", context.getUserAttribute("minecraft_java_owned"))
-        assertEquals("false", context.getUserAttribute("minecraft_bedrock_owned"))
+        assertEquals("true", context.getUserAttribute("minecraft_bedrock_owned"))
         assertEquals(
             "12345678-9012-3456-7890-123456789012",
             context.getUserAttribute("minecraft_java_uuid"),
         )
         assertEquals("GroundsSteve", context.getUserAttribute("minecraft_java_username"))
+        assertEquals(
+            "00000000-0000-0000-0000-00000000002a",
+            context.getUserAttribute("minecraft_bedrock_uuid"),
+        )
         assertEquals("GroundsTag", context.getUserAttribute("xbox_gamertag"))
     }
 

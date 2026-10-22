@@ -55,8 +55,11 @@ class XboxAuthApi(private val delegate: XboxAuthClient = DefaultXboxAuthClient()
         val partnerXboxUserId: String?
             get() = displayClaims?.xui?.firstOrNull()?.ptx
 
+        val xboxUserIds: List<String>
+            get() = displayClaims?.xui?.mapNotNull { it.xid } ?: emptyList()
+
         val displayClaimKeys: Set<String>
-            get() = displayClaims?.xui?.firstOrNull()?.claimKeys ?: emptySet()
+            get() = displayClaims?.xui?.flatMapTo(sortedSetOf()) { it.claimKeys } ?: emptySet()
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -71,6 +74,7 @@ class XboxAuthApi(private val delegate: XboxAuthClient = DefaultXboxAuthClient()
         @param:JsonProperty("uhs") val uhs: String?,
         @param:JsonProperty("gtg") val gtg: String?,
         @param:JsonProperty("ptx") val ptx: String? = null,
+        @param:JsonProperty("xid") val xid: String? = null,
     ) {
         val claimKeys: Set<String>
             get() = buildSet {
@@ -82,6 +86,9 @@ class XboxAuthApi(private val delegate: XboxAuthClient = DefaultXboxAuthClient()
                 }
                 if (!ptx.isNullOrBlank()) {
                     add("ptx")
+                }
+                if (xid != null) {
+                    add("xid")
                 }
             }
     }

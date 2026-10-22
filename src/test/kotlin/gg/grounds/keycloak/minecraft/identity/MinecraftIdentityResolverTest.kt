@@ -943,6 +943,145 @@ class MinecraftIdentityResolverTest {
         assertFalse(error is MinecraftServicesDegradedException)
     }
 
+    @Test
+    fun `adds Floodgate Bedrock UUID to a Java and Bedrock owner`() {
+        val identity =
+            MinecraftIdentityResolver(
+                    xboxClientWithXids(minecraftXid = "42", partnerXid = "42"),
+                    ownedMinecraftClient(ownsJava = true, ownsBedrock = true),
+                    "https://grounds.example.com",
+                )
+                .resolve("ms-access-token")
+
+        assertEquals("java", identity.loginIdentity)
+        assertEquals("00000000-0000-0000-0000-00000000002a", identity.minecraftBedrockUuid)
+        assertEquals("xboxptx-partner-123", identity.brokerUserId)
+    }
+
+    @Test
+    fun `adds Floodgate Bedrock UUID to a Bedrock-only owner`() {
+        val identity =
+            MinecraftIdentityResolver(
+                    xboxClientWithXids(minecraftXid = "42", partnerXid = null),
+                    ownedMinecraftClient(ownsJava = false, ownsBedrock = true),
+                    "https://grounds.example.com",
+                )
+                .resolve("ms-access-token")
+
+        assertEquals("bedrock", identity.loginIdentity)
+        assertEquals("00000000-0000-0000-0000-00000000002a", identity.minecraftBedrockUuid)
+    }
+
+    @Test
+    fun `does not invent a Bedrock UUID when verified XID is absent`() {
+        val identity =
+            MinecraftIdentityResolver(
+                    xboxClientWithXids(minecraftXid = null, partnerXid = null),
+                    ownedMinecraftClient(ownsJava = false, ownsBedrock = true),
+                    "https://grounds.example.com",
+                )
+                .resolve("ms-access-token")
+
+        assertEquals(null, identity.minecraftBedrockUuid)
+    }
+
+    @Test
+    fun `rejects conflicting Minecraft and partner XIDs`() {
+        val resolver =
+            MinecraftIdentityResolver(
+                xboxClientWithXids(minecraftXid = "42", partnerXid = "43"),
+                ownedMinecraftClient(ownsJava = false, ownsBedrock = true),
+                "https://grounds.example.com",
+            )
+
+        assertFailsWith<IdentityBrokerException> { resolver.resolve("ms-access-token") }
+    }
+
+    @Test
+    fun `uses verified XID from encrypted partner token`() {
+        val keyPair = generateRsaKeyPair()
+        val partnerToken =
+            encryptedPartnerXstsToken(
+                keyPair,
+                """{"xid":"99","xui":[{"ptx":"partner-123","gtg":"GroundsTag","xid":"42"}]}""",
+            )
+        val xboxClient =
+            FakeXboxAuthClient(
+                authenticateHandler = {
+                    xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+                },
+                minecraftXstsHandler = {
+                    xboxResponse(
+                        token = "xsts-token",
+                        userHash = "xsts-uhs",
+                        gamertag = "GroundsTag",
+                    )
+                },
+                partnerXstsHandler = { _, _ ->
+                    xboxResponse(token = partnerToken, userHash = null)
+                },
+            )
+
+        val identity =
+            MinecraftIdentityResolver(
+                    xboxClient,
+                    ownedMinecraftClient(ownsJava = false, ownsBedrock = true),
+                    "https://grounds.example.com",
+                    PartnerXstsTokenInspector.fromPemReference(toPkcs8Pem(keyPair)),
+                )
+                .resolve("ms-access-token")
+
+        assertEquals("00000000-0000-0000-0000-00000000002a", identity.minecraftBedrockUuid)
+    }
+
+    private fun xboxClientWithXids(
+        minecraftXid: String?,
+        partnerXid: String?,
+    ): FakeXboxAuthClient =
+        FakeXboxAuthClient(
+            authenticateHandler = {
+                xboxResponse(token = "xbox-user-token", userHash = "xbox-uhs")
+            },
+            minecraftXstsHandler = {
+                xboxResponse(
+                    token = "xsts-token",
+                    userHash = "xsts-uhs",
+                    gamertag = "GroundsTag",
+                    xboxUserId = minecraftXid,
+                )
+            },
+            partnerXstsHandler = { _, _ ->
+                xboxResponse(
+                    token = "partner-xsts-token",
+                    userHash = null,
+                    gamertag = "GroundsTag",
+                    partnerXboxUserId = "partner-123",
+                    xboxUserId = partnerXid,
+                )
+            },
+        )
+
+    private fun ownedMinecraftClient(
+        ownsJava: Boolean,
+        ownsBedrock: Boolean,
+    ): FakeMinecraftClient =
+        FakeMinecraftClient(
+            authenticateHandler = { _, _ ->
+                MinecraftApi.MinecraftAuthResponse("minecraft-token", "Bearer", 3600)
+            },
+            ownershipHandler = {
+                MinecraftApi.Ownership(emptySet(), ownsJava, ownsBedrock)
+            },
+            profileHandler = {
+                MinecraftApi.MinecraftProfile(
+                    id = "12345678901234567890123456789012",
+                    name = "GroundsSteve",
+                    skins = null,
+                    capes = null,
+                )
+            },
+        )
+
     private fun partnerXboxAuthClient(partnerXboxUserId: String): FakeXboxAuthClient =
         FakeXboxAuthClient(
             authenticateHandler = {

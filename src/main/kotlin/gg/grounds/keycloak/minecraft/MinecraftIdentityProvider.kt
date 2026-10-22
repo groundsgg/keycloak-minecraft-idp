@@ -187,6 +187,7 @@ class MinecraftIdentityProvider(
                             ?.toBoolean() ?: false,
                 ),
             minecraftJavaUuid = user.getFirstAttribute(MinecraftBrokeredAttributes.JAVA_UUID),
+            minecraftBedrockUuid = user.getFirstAttribute(MinecraftBrokeredAttributes.BEDROCK_UUID),
             minecraftJavaUsername = javaUsername,
             xboxGamertag = gamertag,
         )

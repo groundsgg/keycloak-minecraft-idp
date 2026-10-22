@@ -1,5 +1,6 @@
 package gg.grounds.keycloak.minecraft.api
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.keycloak.minecraft.api.exceptions.XboxAuthException
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -42,6 +43,7 @@ class XboxAuthApiModelTest {
                                     uhs = "xsts-uhs",
                                     gtg = "GroundsTag",
                                     ptx = "partner-123",
+                                    xid = "281467",
                                 ),
                             ),
                     ),
@@ -50,6 +52,19 @@ class XboxAuthApiModelTest {
         assertEquals("xsts-uhs", response.userHash)
         assertEquals("GroundsTag", response.gamertag)
         assertEquals("partner-123", response.partnerXboxUserId)
-        assertEquals(setOf("uhs", "gtg", "ptx"), response.displayClaimKeys)
+        assertEquals(listOf("281467"), response.xboxUserIds)
+        assertEquals(setOf("uhs", "gtg", "ptx", "xid"), response.displayClaimKeys)
+    }
+
+    @Test
+    fun `JSON response preserves all XID claims for ambiguity checks`() {
+        val response =
+            ObjectMapper()
+                .readValue(
+                    """{"Token":"token","DisplayClaims":{"xui":[{"xid":"42"},{"xid":"43"}]}}""",
+                    XboxAuthApi.XboxAuthResponse::class.java,
+                )
+
+        assertEquals(listOf("42", "43"), response.xboxUserIds)
     }
 }

@@ -199,6 +199,7 @@ After successful authentication, the provider stores and refreshes the following
 | `minecraft_java_owned`     | `true` or `false` - whether Java entitlement was detected    |
 | `minecraft_bedrock_owned`  | `true` or `false` - whether Bedrock entitlement was detected |
 | `minecraft_java_uuid`      | The Minecraft UUID (only when logging in as Java)            |
+| `minecraft_bedrock_uuid`   | Floodgate UUID derived from a verified Xbox XID, when available |
 | `minecraft_java_username`  | The Minecraft Java username (only when logging in as Java)   |
 | `xbox_gamertag`            | The player's Xbox Gamertag (best effort, when available)     |
 
@@ -216,11 +217,20 @@ account-linking and single sign-on scenarios because it is unique per publisher,
 user hash (`uhs`) is not guaranteed to remain stable across future tokens. The Minecraft XSTS
 token is still used only for Minecraft authentication.
 
+The provider treats Xbox XID as a separate, optional identifier. It accepts XID only from the
+server-retrieved Minecraft or partner XSTS response, including a server-decrypted partner token,
+and converts it with Floodgate's `UUID(0L, xuid)` layout. Gamertags, Java UUIDs, user hashes, and
+the publisher-scoped `ptx` broker identifier are never used as substitutes. The configured partner
+token must be authorized by Microsoft to include XID; otherwise `minecraft_bedrock_uuid` remains
+absent and login continues. Existing Bedrock users receive the attribute only after another fully
+verified broker login through an XID-capable partner configuration. There is no automatic backfill.
+
 References:
 
 - https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/live-title-service-authentication
 - https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/security-tokens/live-security-tokens
 - https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/security-tokens/live-token-claims
+- https://github.com/GeyserMC/Floodgate/blob/master/core/src/main/java/org/geysermc/floodgate/util/Utils.java
 
 ### Java Edition vs. Bedrock Edition
 

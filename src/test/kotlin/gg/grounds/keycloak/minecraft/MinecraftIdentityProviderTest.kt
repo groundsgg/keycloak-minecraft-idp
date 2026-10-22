@@ -364,6 +364,8 @@ class MinecraftIdentityProviderTest {
                     mutableMapOf(
                         MinecraftBrokeredAttributes.JAVA_UUID to
                             mutableListOf("12345678-9012-3456-7890-123456789012"),
+                        MinecraftBrokeredAttributes.BEDROCK_UUID to
+                            mutableListOf("00000000-0000-0000-0000-00000000002a"),
                         MinecraftBrokeredAttributes.JAVA_USERNAME to mutableListOf("GroundsSteve"),
                         MinecraftBrokeredAttributes.JAVA_OWNED to mutableListOf("true"),
                         MinecraftBrokeredAttributes.BEDROCK_OWNED to mutableListOf("false"),
@@ -393,6 +395,10 @@ class MinecraftIdentityProviderTest {
         assertEquals(
             "GroundsTag",
             context.getUserAttribute(MinecraftBrokeredAttributes.XBOX_GAMERTAG),
+        )
+        assertEquals(
+            "00000000-0000-0000-0000-00000000002a",
+            context.getUserAttribute(MinecraftBrokeredAttributes.BEDROCK_UUID),
         )
         assertEquals("true", context.getUserAttribute(MinecraftBrokeredAttributes.JAVA_OWNED))
     }

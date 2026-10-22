@@ -27,6 +27,9 @@ class MinecraftIdentityContextFactory(private val config: MinecraftIdentityProvi
             identity.minecraftJavaUuid?.let {
                 setUserAttribute(MinecraftBrokeredAttributes.JAVA_UUID, it)
             }
+            identity.minecraftBedrockUuid?.let {
+                setUserAttribute(MinecraftBrokeredAttributes.BEDROCK_UUID, it)
+            }
             identity.minecraftJavaUsername?.let {
                 setUserAttribute(MinecraftBrokeredAttributes.JAVA_USERNAME, it)
             }
