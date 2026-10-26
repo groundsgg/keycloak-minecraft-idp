@@ -232,6 +232,15 @@ References:
 - https://learn.microsoft.com/en-us/gaming/gdk/docs/services/fundamentals/s2s-auth-calls/service-authentication/security-tokens/live-token-claims
 - https://github.com/GeyserMC/Floodgate/blob/master/core/src/main/java/org/geysermc/floodgate/util/Utils.java
 
+### Avatar URL Mapper
+
+The JAR also ships an OIDC protocol mapper, **Minecraft Avatar URL**
+(`oidc-minecraft-avatar-url-mapper`), that emits a player's avatar URL as a token claim. It
+replaces `{uuid}` in its `avatar.url.template` setting with the user's `minecraft_java_uuid`
+(dashed), for example `https://avatars.grounds.gg/head/{uuid}?size=128` into the `picture` claim.
+The URL is built at token time, so nothing extra is stored on the user. Users without a Java UUID
+get no claim.
+
 ### Java Edition vs. Bedrock Edition
 
 - **Java Edition**: Players with Java entitlement and a Java profile get their Java player name and UUID
