@@ -33,7 +33,10 @@ class MinecraftAvatarUrlMapper :
         "Maps the player's avatar URL to a token claim. `$UUID_PLACEHOLDER` in the template is " +
             "replaced with the user's Minecraft Java UUID; users without one get no claim."
 
-    override fun getConfigProperties(): List<ProviderConfigProperty> = configProperties
+    // Not `configProperties`: inside the class that name resolves to this very getter (Kotlin's
+    // synthetic property for getConfigProperties()), and the method calls itself until the stack
+    // overflows, which takes /admin/serverinfo down with it.
+    override fun getConfigProperties(): List<ProviderConfigProperty> = CONFIG_PROPERTIES
 
     override fun setClaim(
         token: IDToken,
@@ -55,7 +58,7 @@ class MinecraftAvatarUrlMapper :
         const val URL_TEMPLATE = "avatar.url.template"
         const val UUID_PLACEHOLDER = "{uuid}"
 
-        private val configProperties =
+        private val CONFIG_PROPERTIES =
             mutableListOf(
                     ProviderConfigProperty().apply {
                         name = URL_TEMPLATE
