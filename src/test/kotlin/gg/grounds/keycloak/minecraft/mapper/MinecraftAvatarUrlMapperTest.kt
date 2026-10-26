@@ -6,12 +6,21 @@ import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.keycloak.models.ProtocolMapperModel
 import org.keycloak.models.UserModel
 import org.keycloak.models.UserSessionModel
 import org.keycloak.representations.AccessToken
 
 class MinecraftAvatarUrlMapperTest {
+
+    @Test
+    fun `lists the template setting among its config properties`() {
+        // Keycloak calls this for /admin/serverinfo and the admin console.
+        val names = MinecraftAvatarUrlMapper().configProperties.map { it.name }
+
+        assertTrue(MinecraftAvatarUrlMapper.URL_TEMPLATE in names)
+    }
 
     @Test
     fun `maps the avatar url built from the java uuid`() {
