@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.2.0...v1.3.0) (2026-10-26)
+
+
+### Features
+
+* add Minecraft avatar URL protocol mapper ([#74](https://github.com/groundsgg/keycloak-minecraft-idp/issues/74)) ([82eddef](https://github.com/groundsgg/keycloak-minecraft-idp/commit/82eddefb025cf1339c35447a62594210df9fd16a))
+
 ## [1.2.0](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.1.5...v1.2.0) (2026-10-22)
 
 
