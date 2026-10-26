@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.3.0...v1.3.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* stop the avatar URL mapper's config properties from recursing ([#76](https://github.com/groundsgg/keycloak-minecraft-idp/issues/76)) ([32f17c2](https://github.com/groundsgg/keycloak-minecraft-idp/commit/32f17c27a77e29ed9587f8ae2f9bba89af56af0d))
+
 ## [1.3.0](https://github.com/groundsgg/keycloak-minecraft-idp/compare/v1.2.0...v1.3.0) (2026-10-26)
 
 
